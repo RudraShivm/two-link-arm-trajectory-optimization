@@ -1,0 +1,124 @@
+\documentclass[10pt,aspectratio=169]{beamer}
+\usetheme{default}
+\usefonttheme{professionalfonts}
+\setbeamertemplate{navigation symbols}{}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{hyperref}
+
+\definecolor{ink}{HTML}{1A2744}
+\definecolor{accent}{HTML}{1F4E79}
+\definecolor{mute}{HTML}{5A6570}
+\definecolor{card}{HTML}{F4F6F8}
+
+\setbeamercolor{normal text}{fg=ink,bg=white}
+\setbeamercolor{frametitle}{fg=ink,bg=white}
+\setbeamercolor{title}{fg=ink,bg=white}
+\setbeamercolor{block title}{fg=white,bg=accent}
+\setbeamercolor{block body}{bg=card,fg=ink}
+\setbeamercolor{itemize item}{fg=accent}
+\setbeamerfont{title}{series=\bfseries,size=\LARGE}
+\setbeamerfont{frametitle}{series=\bfseries,size=\large}
+
+\setbeamertemplate{footline}{%
+  \leavevmode%
+  \hbox{%
+    \begin{beamercolorbox}[wd=.82\paperwidth,ht=2.4ex,dp=1ex,leftskip=1.2em]{author in head/foot}%
+      {\color{mute}\scriptsize Numerical Analysis --- Project Proposal}%
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.18\paperwidth,ht=2.4ex,dp=1ex,center]{date in head/foot}%
+      {\color{mute}\scriptsize\insertframenumber/\inserttotalframenumber}%
+    \end{beamercolorbox}%
+  }%
+}
+
+\title{Comparing Three Numerical Methods\\for Planar Two-Link Arm Motion}
+\date{}
+
+\begin{document}
+
+%----------------------------------------------------------------------
+\begin{frame}[t]
+  \vspace{0.15cm}
+  \noindent{\LARGE\bfseries Comparing Three Numerical Methods\\[0.15em]
+  for Planar Two-Link Arm Motion}
+
+  \vspace{0.45cm}
+  {\small
+  \textbf{Course.} CSE402: Numerical Analysis, Simulation and Modeling Sessional\\[0.25em]
+  \textbf{Section.} C-2\\[0.4em]
+  \textbf{Group members.}
+  \begin{itemize}
+    \item 2105161 --- Sadia Naushin
+    \item 2105163 --- Dibbo Chowdhury
+    \item 2105173 --- Sunanda Chowdhury
+    \item 2105174 --- Nujhat Sadia
+    \item 2105176 --- Navin Nawar
+    \item 2105179 --- Arpa Das
+  \end{itemize}
+  }
+\end{frame}
+
+%----------------------------------------------------------------------
+\begin{frame}{Problem Statement \& Scope}
+  \textbf{Problem.} Compute $q(t),\tau(t)$ on a fixed horizon $[0,T]$ taking a planar two-link arm from pose~$A$ to pose~$B$.
+  With $q=(\theta_1,\theta_2)^\top$ and $\tau=(\tau_1,\tau_2)^\top$,
+  {\small
+  \begin{align*}
+    M(q)\,\ddot q + C(q,\dot q)\,\dot q + g(q) &= \tau, && t\in[0,T],\\
+    q(0)=q_A,\quad q(T)&=q_B,\\
+    q_{\min} &\le q(t) \le q_{\max}.
+  \end{align*}
+  }
+
+  \vspace{0.15cm}
+  \textbf{Approach (course directions).}
+  \begin{itemize}
+    \item \textbf{Cross-domain application:} course numerical tools (time integration, collocation, solving nonlinear systems) applied to robot-arm motion.
+    \item \textbf{Exploratory / comparative study:} the same model and task, three established methods, compared on accuracy and cost. Not a new algorithm.
+  \end{itemize}
+
+  \vspace{0.15cm}
+  \begin{block}{Scope}
+    {\small Simulation only (Python). Two-link planar arm. We do not reproduce the base paper's high-DoF pipeline or use hardware.}
+  \end{block}
+\end{frame}
+
+%----------------------------------------------------------------------
+\begin{frame}{Base Paper Overview}
+  \textbf{Cardona-Ortiz, D.\ and Arechavaleta, G.} (2025).\\
+  Trajectory optimization for highly articulated robots based on sparsity-free local direct collocation.\\
+  \emph{International Journal of Applied Mathematics and Computer Science}, 35(4), 577--589.\\
+  \url{https://doi.org/10.61822/amcs-2025-0041}
+
+  \vspace{0.4cm}
+  \textbf{Domain.} Numerical optimal control for robot motion (many-joint arms and similar mechanisms).
+
+  \vspace{0.3cm}
+  \textbf{Summary.} The paper plans robot motions by direct collocation: trapezoidal and Hermite--Simpson rules turn continuous physics into a finite set of equations, which are then solved numerically. Their extra software (sparse Jacobian assembly, Pinocchio, high-DoF platforms) is not our implementation target.
+
+  \vspace{0.3cm}
+  {\small Method recipes we follow in code are those in Kelly, \emph{An Introduction to Trajectory Optimization}, SIAM Review, 2017.}
+\end{frame}
+
+%----------------------------------------------------------------------
+\begin{frame}{Expected Methodology}
+  \textbf{Model.} Planar two-link arm; states are joint angles and velocities; inputs are joint torques.
+
+  \vspace{0.3cm}
+  \textbf{Methods (identical start, goal, and time budget).}
+  \begin{enumerate}
+    \item Shooting with fourth-order Runge--Kutta integration
+    \item Trapezoidal direct collocation
+    \item Hermite--Simpson direct collocation
+  \end{enumerate}
+
+  \vspace{0.25cm}
+  \textbf{Evaluation.} Tip error at the goal, residual of the dynamics, and runtime, versus number of time nodes.\\[0.35em]
+  \textbf{Deliverables.} Implementation; comparison table and plots; synchronized matplotlib visualization of the three motions.
+\end{frame}
+
+\end{document}
