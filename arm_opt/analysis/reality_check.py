@@ -6,7 +6,7 @@ measuring integration drift and defect leakage.
 """
 
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Callable, Optional, Tuple
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.integrate import solve_ivp
@@ -39,8 +39,16 @@ def perform_reality_check(
     problem: TrajectoryProblem,
     result: TrajectoryResult,
     num_eval_points: int = 200,
+    state_interp_fn: Optional[Callable[[np.ndarray], np.ndarray]] = None,
 ) -> RealityCheckResult:
-    """Simulates the true continuous dynamics under the optimized control profile."""
+    """Simulates the true continuous dynamics under the optimized control profile.
+
+    Args:
+        state_interp_fn: Optional t -> x(t) of shape (M, 4) used to place the
+            optimizer's state between nodes. Default None keeps the old
+            straight-line (linear) interpolation. Only max_state_drift and
+            max_cartesian_drift depend on it; terminal_cartesian_drift does not.
+    """
     t_opt = result.time
     u_opt = result.control
     x_opt = result.state
@@ -74,8 +82,11 @@ def perform_reality_check(
     x_sim = sim_sol.y.T  # shape: (num_eval_points, 4)
 
     # Interpolate optimizer state onto simulation grid
-    state_interpolator = interp1d(t_opt, x_opt, axis=0, kind="linear")
-    x_opt_interp = state_interpolator(t_sim)
+    if state_interp_fn is None:
+        state_interpolator = interp1d(t_opt, x_opt, axis=0, kind="linear")  # old behavior
+        x_opt_interp = state_interpolator(t_sim)
+    else:
+        x_opt_interp = np.asarray(state_interp_fn(t_sim))
 
     # Calculate state drift
     state_diffs = np.linalg.norm(x_sim - x_opt_interp, axis=1)

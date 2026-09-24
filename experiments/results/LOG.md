@@ -103,4 +103,52 @@ reliable configuration we tested.
 
 ## Arpa: A1–A4 (Accuracy & Correctness)
 
-*(to be filled in)*
+### A1: Quadratic (trapezoidal-consistent) state interpolation
+
+**What changed.**
+- New file [`arm_opt/solvers/trapezoidal_utils.py`](../../arm_opt/solvers/trapezoidal_utils.py) adds
+  `trapezoidal_interpolate()`. Trapezoidal collocation assumes f = ẋ changes *linearly* inside an
+  interval, so the state follows the parabola
+  `x(t) = x_k + f_k·τ + (τ²/2h)(f_{k+1} − f_k)`. The torque stays linear.
+- [`reality_check.py`](../../arm_opt/analysis/reality_check.py) gets an optional
+  `state_interp_fn=None` parameter. The default keeps the old straight-line behaviour, so the
+  other solvers are unaffected.
+
+**Numbers** (`rest_to_rest`, warm start, `ftol=1e-10`;
+reproduce with `PYTHONPATH=. python3 experiments/trapezoidal_interpolation.py`):
+
+Reality check (one open-loop simulation over the whole motion):
+
+| N | max state drift (linear) | max state drift (quadratic) | max EE drift (linear) | max EE drift (quadratic) | final drift (both) |
+|---|---|---|---|---|---|
+| 10 | 7.3376 | 6.7070 | 0.9967 m | 0.9967 m | 0.9967 m |
+| 20 | 3.1085 | 3.1085 | 0.1197 m | 0.1202 m | 0.0712 m |
+| 40 | 0.7969 | 0.6870 | 0.0318 m | 0.0318 m | 0.0094 m |
+
+Local interpolation error (simulation restarted from the node at every interval, so accumulated
+drift is removed and only the interpolant's shape is measured):
+
+| N | linear | quadratic | linear / quadratic |
+|---|---|---|---|
+| 10 | 3.7295 | 2.5842 | 1.4× |
+| 20 | 1.5034 | 1.3468 | 1.1× |
+| 40 | 0.6851 | 0.2558 | 2.7× |
+
+Plot: [`interpolation.png`](interpolation.png) (θ1 and ω1 at N = 10: nodes, linear, quadratic, simulation).
+
+**Findings.**
+- **Final drift is identical** with both interpolations, as expected. It compares the
+  simulation's end with the target and never uses the state interpolant.
+- **Max drift barely changes** (at most 1.2× better). Over the whole motion, the open-loop
+  simulation drifts away from the plan, and that accumulated drift is much larger than the
+  interpolation's shape error. So max drift mostly measures the drift, not the interpolation.
+- **Locally, the parabola is always better**, and the gap grows as N increases (2.7× at N = 40).
+  In the plot, the linear version cuts straight across the ω1 peaks; the parabola follows
+  the curve.
+- Conclusion: use the quadratic interpolant whenever the trapezoidal state is needed *between*
+  nodes. A2 (convergence) and A4 (midpoint obstacle check) build on it.
+
+**Tests** ([`tests/test_trapezoidal_improvements.py`](../../tests/test_trapezoidal_improvements.py), 7 tests, all pass):
+interpolant passes through every node (error ≤ max defect), the end of each parabola lands on the
+next node, it is continuous across nodes, its slope at each node equals f(x_k, u_k), the default
+reality check is unchanged, and the hook changes max drift but not final drift.
