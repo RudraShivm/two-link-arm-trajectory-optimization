@@ -98,3 +98,18 @@ def link_clearances(params, angles: np.ndarray, center, radius: float):
         "link2": point_segment_distance(elbow, hand, center) - radius,
         "hand": np.linalg.norm(hand - center, axis=1) - radius,
     }
+
+
+def path_clearance(problem, result, center, radius: float, samples_per_interval: int = 20):
+    """A4: clearances along the whole trajectory, sampling the A1 parabola inside every interval.
+
+    Returns:
+        (t, clearances) where clearances is the dict from `link_clearances`, sampled at
+        `samples_per_interval` points per interval (nodes included).
+    """
+    t_nodes = np.asarray(result.time, dtype=float)
+    frac = np.arange(samples_per_interval) / samples_per_interval
+    t = np.concatenate([t_nodes[:-1, None] + frac[None, :] * np.diff(t_nodes)[:, None]]).ravel()
+    t = np.append(t, t_nodes[-1])
+    x, _ = trapezoidal_interpolate(problem.arm, t_nodes, result.state, result.control, t)
+    return t, link_clearances(problem.arm_params, x, center, radius)

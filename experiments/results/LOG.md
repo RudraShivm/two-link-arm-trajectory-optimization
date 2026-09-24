@@ -293,3 +293,59 @@ value), and the whole-arm solution on the new obstacle (N = 20) succeeds with no
 **⚠ Tell the team:** the shared `ObstacleScenario` gained a flag but its defaults are untouched.
 If the team wants the whole-arm check in the main benchmark, all three solvers must switch to the new
 obstacle together, because the old one is infeasible with it.
+
+### A4: Obstacle check at interval midpoints
+
+**What changed.**
+- [`improved_trapezoidal.py`](../../arm_opt/solvers/improved_trapezoidal.py): new flag
+  `check_midpoints=False` and a `midpoints(z)` method. With the flag on, every path constraint gets a
+  second block evaluated at the middle of every interval, using the A1 parabola at τ = h/2:
+  `x_mid = x_k + (h/8)(3 f_k + f_{k+1})`, `u_mid = (u_k + u_{k+1})/2`. Row k depends on nodes k and
+  k+1, so `row_nodes = (k, k+1)` and the S3 sparse Jacobian covers it automatically (12 colour
+  groups, same as the defects). It works with `solve_with_warm_start(..., check_midpoints=True)` and
+  with the A3 whole-arm constraints. Default off, so all earlier results are unchanged.
+- [`trapezoidal_utils.py`](../../arm_opt/solvers/trapezoidal_utils.py): `path_clearance()` samples
+  the parabola at 20 points per interval (the checker the plan asks for).
+- Script: `PYTHONPATH=. python3 experiments/obstacle_checks.py --part a4`.
+
+**Numbers** (original obstacle scenario, hand-only check, warm start, `ftol=1e-8`):
+
+| N | midpoints | success | cost | min hand clearance at nodes | min hand clearance between nodes | solve time |
+|---|---|---|---|---|---|---|
+| 8 | off | True | 244.5 | +0.0050 m | −0.3018 m ❌ | 0.9 s |
+| 8 | on | True | 253.5 | +0.0050 m | −0.3331 m ❌ | 1.5 s |
+| 10 | off | True | 317.0 | +0.0050 m | −0.2613 m ❌ | 1.4 s |
+| 10 | on | True | 322.7 | +0.0050 m | −0.1563 m ❌ | 2.1 s |
+| 15 | off | True | 232.8 | +0.0050 m | −0.2301 m ❌ | 2.7 s |
+| 15 | on | True | 300.7 | +0.0050 m | −0.0131 m ❌ | 3.1 s |
+| 20 | off | True | 306.9 | +0.0050 m | −0.1258 m ❌ | 2.1 s |
+| 20 | on | True | 304.2 | +0.0050 m | −0.0028 m ❌ | 6.4 s |
+| 30 | off | True | 239.2 | +0.0050 m | −0.0150 m ❌ | 2.7 s |
+| 30 | on | True | 297.2 | +0.0050 m | **+0.0021 m** ✅ | 4.1 s |
+
+Plot: [`obstacle_midpoints.png`](obstacle_midpoints.png) (N = 15: hand path near the obstacle, off vs on,
+and clearance over time).
+
+**Findings.**
+- **Corner cutting is real and large.** At every N the hand is exactly on the safety margin at the
+  nodes (+0.005 m), so "all constraints satisfied" is true, yet between two nodes the hand goes up to
+  **0.30 m** inside an obstacle of radius 0.35. At N = 15 the hand simply jumps from one side of the
+  obstacle to the other in a single interval (see the plot).
+- **Checking midpoints fixes most of it for N ≥ 15.** The worst penetration drops from −0.230 → −0.013 m
+  (N = 15), −0.126 → −0.003 m (N = 20), and −0.015 m → **+0.002 m, collision-free** (N = 30).
+- **It does not help at N = 8 (and only partly at N = 10).** With so few nodes, one interval is long
+  enough that the path can pass *between* a node and a midpoint. Checking only the midpoint halves the
+  spacing between checked points; it does not guarantee the whole curve. More check points per
+  interval (e.g. quarter points), or simply more nodes, would be needed.
+- **Being safe costs effort.** With midpoints on, the cost is usually higher (N = 30: 239.2 → 297.2,
+  +24%) because the cheap solution was only cheap because it cut through the obstacle. Small
+  exceptions (N = 20: 306.9 → 304.2) come from SLSQP landing in different local minima; the cost also
+  jumps around with N for the same reason (the hand-only problem has several local minima, see A3).
+- On the A3 whole-arm scenario (new obstacle) midpoints change nothing, because that path already has
+  +0.23 m clearance everywhere, so there is no corner to cut.
+- Solve time grows 1.1–3× (N more constraint rows per path constraint).
+
+**Tests** (5 new, all pass): the midpoint formula equals the general A1 formula at τ = h/2 (< 1e-12),
+the flag is off by default, the midpoint block's sparse Jacobian matches a dense finite difference and
+uses 12 colour groups, a midpoint solve (N = 15) has clearance ≥ −1e-6 at both nodes and midpoints, and
+`path_clearance` samples include the nodes.

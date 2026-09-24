@@ -6,8 +6,13 @@ import numpy as np
 from arm_opt.analysis.reality_check import perform_reality_check
 from arm_opt.dynamics.parameters import ArmParameters
 from arm_opt.solvers.base import TrajectoryProblem
+from scipy.optimize._numdiff import approx_derivative
+
 from arm_opt.solvers.improved_trapezoidal import (
     ImprovedTrapezoidalSolver,
+    build_pattern,
+    color_columns,
+    sparse_fd_jacobian,
     solve_with_warm_start,
     state_derivative_batch,
 )
@@ -17,6 +22,7 @@ from arm_opt.solvers.trapezoidal_utils import (
     fit_order,
     link_clearances,
     make_state_interp_fn,
+    path_clearance,
     trapezoidal_interpolate,
 )
 
@@ -160,6 +166,61 @@ class TestA3FullBodyObstacle(unittest.TestCase):
         self.assertTrue(result.success)
         c = link_clearances(problem.arm_params, result.state, scenario.obs_center, scenario.obs_radius)
         self.assertGreaterEqual(min(c["link1"].min(), c["link2"].min()), -1e-6)
+
+
+class TestA4Midpoints(unittest.TestCase):
+    def setUp(self):
+        self.rng = np.random.default_rng(2)
+        self.problem = ObstacleScenario().create_problem(n_nodes=12)
+        self.solver = ImprovedTrapezoidalSolver(self.problem, check_midpoints=True)
+
+    def random_z(self):
+        N = self.solver.N
+        states = np.column_stack([
+            self.rng.uniform(-1.0, 1.0, (N + 1, 2)), self.rng.uniform(-3.0, 3.0, (N + 1, 2))
+        ])
+        return self.solver.pack(states, self.rng.uniform(-20.0, 20.0, (N + 1, 2)))
+
+    def test_midpoint_formula_equals_general_formula(self):
+        z = self.random_z()
+        states, controls = self.solver.unpack(z)
+        t = self.problem.time_grid
+        x_mid, u_mid = self.solver.midpoints(z)
+        x_gen, u_gen = trapezoidal_interpolate(self.problem.arm, t, states, controls, 0.5 * (t[:-1] + t[1:]))
+        self.assertLess(np.max(np.abs(x_mid - x_gen)), 1e-12)
+        self.assertLess(np.max(np.abs(u_mid - u_gen)), 1e-12)
+
+    def test_flag_off_by_default(self):
+        default = ImprovedTrapezoidalSolver(self.problem)
+        self.assertEqual(len(self.solver.constraint_blocks()), len(default.constraint_blocks()) + 1)
+
+    def test_midpoint_block_sparse_jacobian_matches_dense(self):
+        blk = self.solver.constraint_blocks()[-1]
+        self.assertEqual(len(blk["row_nodes"]), self.solver.N)
+        S = build_pattern(blk["row_nodes"], self.solver.N + 1, self.solver.node_vars)
+        groups = color_columns(S)
+        self.assertEqual(len(groups), 12)  # same banded structure as the defects
+        z = self.random_z()
+        J_sparse = sparse_fd_jacobian(blk["fun"], z, S, groups)
+        J_dense = approx_derivative(blk["fun"], z, method="2-point")
+        self.assertLess(np.max(np.abs(J_sparse - J_dense)), 1e-4 * max(1.0, np.max(np.abs(J_dense))))
+
+    def test_solution_is_clear_at_midpoints(self):
+        problem = ObstacleScenario().create_problem(n_nodes=15)
+        result = solve_with_warm_start(problem, max_iter=1000, ftol=1e-8, check_midpoints=True)
+        self.assertTrue(result.success)
+        solver = ImprovedTrapezoidalSolver(problem, check_midpoints=True)
+        x_mid, u_mid = solver.midpoints(solver.pack(result.state, result.control))
+        g = problem.path_constraints[0]
+        self.assertGreaterEqual(min(g(x_mid[k], u_mid[k]) for k in range(solver.N)), -1e-6)
+        self.assertGreaterEqual(min(g(x, u) for x, u in zip(result.state, result.control)), -1e-6)
+
+    def test_path_clearance_includes_nodes(self):
+        problem = ObstacleScenario().create_problem(n_nodes=10)
+        result = ImprovedTrapezoidalSolver(problem).solve()
+        t, c = path_clearance(problem, result, np.array([1.2, 0.0]), 0.35, samples_per_interval=20)
+        self.assertEqual(len(t), 20 * 10 + 1)
+        np.testing.assert_allclose(t[::20], result.time, atol=1e-12)
 
 
 if __name__ == "__main__":

@@ -1,16 +1,21 @@
-"""A3: whole-arm obstacle check.
+"""A3 + A4: obstacle checks.
 
-Part 1: the ORIGINAL scenario only checks the hand. Show that its links pass
-        through the obstacle, and that a whole-arm check makes it infeasible.
-Part 2: on the new obstacle, compare hand-only vs whole-arm check over several
-        N and both cold and warm start. Save before/after pictures.
+Part 1 (A3): the ORIGINAL scenario only checks the hand. Show that its links pass
+             through the obstacle, and that a whole-arm check makes it infeasible.
+Part 2 (A3): on the new obstacle, compare hand-only vs whole-arm check over several
+             N and both cold and warm start. Save before/after pictures.
+Part 3 (A4): the constraint is only enforced AT nodes. Show that the path cuts
+             through the obstacle between nodes, and that also checking the
+             interval midpoints (check_midpoints=True) fixes most of it.
 
 Clearance is measured on the A1 quadratic interpolant at 3000 time samples, so
 it also sees what happens between nodes (negative = inside the obstacle).
 
-Run:  PYTHONPATH=. python3 experiments/obstacle_checks.py
+Run:  PYTHONPATH=. python3 experiments/obstacle_checks.py            (all parts)
+      PYTHONPATH=. python3 experiments/obstacle_checks.py --part a4  (only part 3)
 """
 
+import argparse
 import os
 
 import matplotlib
@@ -22,7 +27,7 @@ import numpy as np
 from arm_opt.dynamics.kinematics import forward_kinematics
 from arm_opt.scenarios.obstacle import ObstacleScenario
 from arm_opt.solvers.improved_trapezoidal import ImprovedTrapezoidalSolver, solve_with_warm_start
-from arm_opt.solvers.trapezoidal_utils import link_clearances, trapezoidal_interpolate
+from arm_opt.solvers.trapezoidal_utils import link_clearances, path_clearance, trapezoidal_interpolate
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results")
 NEW_OBSTACLE = dict(
@@ -31,6 +36,9 @@ NEW_OBSTACLE = dict(
 )
 NS = [20, 30, 40]
 PICTURE_N = 30
+MIDPOINT_NS = [8, 10, 15, 20, 30]
+MIDPOINT_PICTURE_N = 15
+SAMPLES_PER_INTERVAL = 20
 N_DENSE = 3000
 
 COLOR_LINK1, COLOR_LINK2 = "#2a78d6", "#eb6834"
@@ -169,11 +177,96 @@ def part2_new_obstacle():
     return table
 
 
+def part3_midpoints():
+    print("## Part 3 (A4): original scenario, hand-only check, midpoints off vs on\n")
+    scenario = ObstacleScenario()
+    lines = [
+        "| N | midpoints | success | cost | min hand clearance at nodes | min hand clearance between nodes | solve time |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    runs = {}
+    for n in MIDPOINT_NS:
+        for mid in (False, True):
+            problem = scenario.create_problem(n_nodes=n)
+            result = solve_with_warm_start(problem, max_iter=1000, ftol=1e-8, check_midpoints=mid)
+            at_nodes = link_clearances(problem.arm_params, result.state, scenario.obs_center, scenario.obs_radius)
+            _, dense = path_clearance(problem, result, scenario.obs_center, scenario.obs_radius, SAMPLES_PER_INTERVAL)
+            worst = dense["hand"].min()
+            runs[(n, mid)] = (problem, result)
+            lines.append(
+                f"| {n} | {'on' if mid else 'off'} | {result.success} | {result.cost:.1f} | "
+                f"{at_nodes['hand'].min():+.4f} m | {worst:+.4f} m{' ❌' if worst < -1e-3 else ''} | "
+                f"{result.solve_time:.1f} s |"
+            )
+            print(lines[-1], flush=True)
+    table = "\n".join(lines)
+
+    # Picture: hand path near the obstacle, off vs on.
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5.2), gridspec_kw={"width_ratios": [1, 1, 1.3]})
+    for ax, mid in zip(axes[:2], (False, True)):
+        problem, result = runs[(MIDPOINT_PICTURE_N, mid)]
+        t, dense = path_clearance(problem, result, scenario.obs_center, scenario.obs_radius, SAMPLES_PER_INTERVAL)
+        x, _ = trapezoidal_interpolate(problem.arm, result.time, result.state, result.control, t)
+        hand = np.array([arm_points(problem.arm_params, q)[2] for q in x[:, :2]])
+        ax.add_patch(plt.Circle(scenario.obs_center, scenario.obs_radius, color=COLOR_OBSTACLE, alpha=0.35, lw=0))
+        ax.add_patch(plt.Circle(scenario.obs_center, scenario.obs_radius, fill=False, color=COLOR_OBSTACLE, lw=1.5))
+        ax.plot(hand[:, 0], hand[:, 1], "-", color=COLOR_OK, lw=1.5, label="hand path (between nodes)")
+        inside = dense["hand"] < 0
+        ax.plot(np.where(inside, hand[:, 0], np.nan), np.where(inside, hand[:, 1], np.nan), "-",
+                color=COLOR_HIT, lw=3, label="inside obstacle")
+        nodes = np.array([arm_points(problem.arm_params, q)[2] for q in result.state[:, :2]])
+        ax.plot(nodes[:, 0], nodes[:, 1], "o", color=COLOR_OK, ms=6, markeredgecolor="white", label="nodes (checked)")
+        if mid:
+            solver = ImprovedTrapezoidalSolver(problem, check_midpoints=True)
+            x_mid, _ = solver.midpoints(solver.pack(result.state, result.control))
+            mids = np.array([arm_points(problem.arm_params, q)[2] for q in x_mid[:, :2]])
+            ax.plot(mids[:, 0], mids[:, 1], "D", color="#1baf7a", ms=5, markeredgecolor="white",
+                    label="midpoints (checked, A4)")
+        ax.set_aspect("equal")
+        ax.set_xlim(0.4, 2.0)
+        ax.set_ylim(-0.8, 0.8)
+        ax.grid(alpha=0.25)
+        ax.set_title(f"midpoint check {'ON' if mid else 'OFF'}, N = {MIDPOINT_PICTURE_N}: "
+                     f"worst {dense['hand'].min():+.3f} m", fontsize=10)
+        ax.legend(fontsize=8, frameon=False, loc="upper left")
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+
+    ax = axes[2]
+    ax.axhline(0, color="#3d3d3a", lw=1)
+    for mid, color in ((False, COLOR_HIT), (True, COLOR_OK)):
+        problem, result = runs[(MIDPOINT_PICTURE_N, mid)]
+        t, dense = path_clearance(problem, result, scenario.obs_center, scenario.obs_radius, SAMPLES_PER_INTERVAL)
+        ax.plot(t, dense["hand"], color=color, lw=2, label=f"midpoints {'on' if mid else 'off'}")
+    for t_node in runs[(MIDPOINT_PICTURE_N, False)][1].time:
+        ax.axvline(t_node, color="#8a8a86", lw=0.5, alpha=0.4)
+    ax.set_ylim(-0.3, 0.3)
+    ax.set_xlabel("time [s]  (thin lines = nodes)")
+    ax.set_ylabel("hand clearance [m]")
+    ax.set_title("Hand clearance over time (zoomed near 0)", fontsize=10)
+    ax.grid(alpha=0.25)
+    ax.legend(fontsize=8, frameon=False, loc="lower right")
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    fig.suptitle("Corner cutting: every node is outside, but the path between nodes goes through the obstacle")
+    fig.tight_layout()
+    out = os.path.join(RESULTS_DIR, "obstacle_midpoints.png")
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"\nsaved {out}")
+    return table
+
+
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--part", choices=["all", "a3", "a4"], default="all")
+    args = parser.parse_args()
     os.makedirs(RESULTS_DIR, exist_ok=True)
-    part1_original()
-    table = part2_new_obstacle()
-    print("\n" + table)
+    if args.part in ("all", "a3"):
+        part1_original()
+        print("\n" + part2_new_obstacle())
+    if args.part in ("all", "a4"):
+        print("\n" + part3_midpoints())
 
 
 if __name__ == "__main__":

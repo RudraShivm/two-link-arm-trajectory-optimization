@@ -231,6 +231,7 @@ class ImprovedTrapezoidalSolver:
         vectorized: bool = True,  # S2
         sparse_jacobian: bool = True,  # S3
         scaling: bool = True,  # S4
+        check_midpoints: bool = False,  # A4
     ):
         self.problem = problem
         self.arm = problem.arm
@@ -245,6 +246,7 @@ class ImprovedTrapezoidalSolver:
         self.vectorized = vectorized
         self.sparse_jacobian = sparse_jacobian
         self.scaling = scaling
+        self.check_midpoints = check_midpoints
 
     # ------------------------------------------------------------------ helpers
 
@@ -280,6 +282,20 @@ class ImprovedTrapezoidalSolver:
         f = self.dynamics_at_nodes(states, controls)
         d = states[1:] - states[:-1] - 0.5 * self.dt * (f[:-1] + f[1:])
         return d.flatten()  # row order: defect 0 (4 rows), defect 1 (4 rows), ...
+
+    def midpoints(self, z: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """A4: state and control at the middle of every interval, shape (N, 4) and (N, 2).
+
+        Trapezoidal collocation makes the state a parabola inside each interval (A1).
+        At tau = h/2 that parabola simplifies to
+            x_mid = x_k + (h/8) * (3 f_k + f_{k+1})
+            u_mid = (u_k + u_{k+1}) / 2
+        """
+        states, controls = self.unpack(z)
+        f = self.dynamics_at_nodes(states, controls)
+        x_mid = states[:-1] + (self.dt / 8.0) * (3.0 * f[:-1] + f[1:])
+        u_mid = 0.5 * (controls[:-1] + controls[1:])
+        return x_mid, u_mid
 
     def max_violation(self, z: np.ndarray) -> float:
         """Worst violation of start/end conditions and defects.
@@ -411,6 +427,19 @@ class ImprovedTrapezoidalSolver:
                 "fun": path_con,
                 "row_nodes": [(k,) for k in range(N + 1)],  # row k uses only node k
             })
+
+            if self.check_midpoints:
+                # A4: the same constraint in the middle of every interval, so the
+                # path cannot cut through an obstacle between two nodes.
+                def midpoint_con(z, fn=path_fn):
+                    x_mid, u_mid = self.midpoints(z)
+                    return np.array([fn(x_mid[k], u_mid[k]) for k in range(N)])
+
+                blocks.append({
+                    "type": "ineq",
+                    "fun": midpoint_con,
+                    "row_nodes": [(k, k + 1) for k in range(N)],  # midpoint k uses nodes k and k+1
+                })
         return blocks
 
     # ---------------------------------------------------------------- solving
@@ -495,7 +524,8 @@ class ImprovedTrapezoidalSolver:
 
         enabled = [name for name, on in [
             ("S1", self.fix_endpoints_in_bounds), ("S2", self.vectorized),
-            ("S3", self.sparse_jacobian), ("S4", self.scaling)] if on]
+            ("S3", self.sparse_jacobian), ("S4", self.scaling),
+            ("A4", self.check_midpoints)] if on]
 
         return TrajectoryResult(
             method_name="Trapezoidal Collocation (Improved)",
