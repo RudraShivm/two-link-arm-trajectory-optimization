@@ -61,3 +61,9 @@ def make_state_interp_fn(problem, result):
         return x
 
     return state_interp_fn
+
+
+def fit_order(hs, errors) -> float:
+    """A2: slope of log(error) vs log(h), i.e. the observed order p in error ≈ C·h^p."""
+    slope, _ = np.polyfit(np.log(np.asarray(hs, dtype=float)), np.log(np.asarray(errors, dtype=float)), 1)
+    return float(slope)

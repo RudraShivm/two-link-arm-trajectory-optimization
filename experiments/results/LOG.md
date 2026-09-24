@@ -152,3 +152,68 @@ Plot: [`interpolation.png`](interpolation.png) (θ1 and ω1 at N = 10: nodes, li
 interpolant passes through every node (error ≤ max defect), the end of each parabola lands on the
 next node, it is continuous across nodes, its slope at each node equals f(x_k, u_k), the default
 reality check is unchanged, and the hook changes max drift but not final drift.
+
+### A2: Convergence-order study
+
+**What changed.**
+- New script [`experiments/trapezoidal_convergence.py`](../trapezoidal_convergence.py). For
+  N = 10, 15, 20, 30, 40, 80, 160 on `rest_to_rest` and `high_speed`, it solves with warm start
+  (`ftol=1e-10`, `max_iter=1000`), runs the reality check, and fits the slope of log(error) vs
+  log(h). Results are cached in `convergence.json`, and `--replot` redraws without re-solving.
+- `fit_order()` added to [`trapezoidal_utils.py`](../../arm_opt/solvers/trapezoidal_utils.py).
+- Error measures: **final drift** (simulation end vs target) and **max state error** (simulation
+  vs the A1 quadratic interpolant, over the whole trajectory).
+
+**Numbers** (reproduce: `PYTHONPATH=. python3 experiments/trapezoidal_convergence.py`, about 5 min;
+N = 160 alone takes 100–150 s):
+
+| scenario | N | h [s] | expected ratio (O(h²)) | final drift [m] | ratio | max state error | ratio | max violation |
+|---|---|---|---|---|---|---|---|---|
+| rest_to_rest | 10 | 0.10000 |  | 9.967e-01 |  | 6.718e+00 |  | 4.4e-14 |
+| rest_to_rest | 15 | 0.06667 | 2.25× | 2.304e-01 | 4.3× | 4.662e+00 | 1.4× | 1.2e-14 |
+| rest_to_rest | 20 | 0.05000 | 1.78× | 7.120e-02 | 3.2× | 3.108e+00 | 1.5× | 4.5e-14 |
+| rest_to_rest | 30 | 0.03333 | 2.25× | 2.028e-02 | 3.5× | 1.281e+00 | 2.4× | 2.5e-13 |
+| rest_to_rest | 40 | 0.02500 | 1.78× | 9.441e-03 | 2.1× | 6.870e-01 | 1.9× | 2.7e-13 |
+| rest_to_rest | 80 | 0.01250 | 4.00× | 1.681e-03 | 5.6× | 1.718e-01 | 4.0× | 2.3e-13 |
+| rest_to_rest | 160 | 0.00625 | 4.00× | 3.927e-04 | 4.3× | 4.354e-02 | 3.9× | 8.7e-13 |
+| high_speed | 10 | 0.04500 |  | 1.287e-01 |  | 1.760e+00 |  | 1.1e-13 |
+| high_speed | 15 | 0.03000 | 2.25× | 4.160e-02 | 3.1× | 2.196e+00 | 0.8× | 4.6e-14 |
+| high_speed | 20 | 0.02250 | 1.78× | 1.465e-02 | 2.8× | 1.239e+00 | 1.8× | 5.9e-14 |
+| high_speed | 30 | 0.01500 | 2.25× | 2.174e-03 | 6.7× | 5.390e-01 | 2.3× | 9.4e-14 |
+| high_speed | 40 | 0.01125 | 1.78× | 1.604e-03 | 1.4× | 3.171e-01 | 1.7× | 1.4e-13 |
+| high_speed | 80 | 0.00562 | 4.00× | 4.022e-04 | 4.0× | 7.962e-02 | 4.0× | 4.7e-13 |
+| high_speed | 160 | 0.00281 | 4.00× | 1.136e-04 | 3.5× | 2.032e-02 | 3.9× | 8.9e-14 |
+
+(ratio = error at the previous N / error at this N. O(h²) predicts (h_prev/h)², i.e. 4× per doubling of N.)
+
+
+| scenario | metric | fitted order (all N) | fitted order (N ≥ 20) |
+|---|---|---|---|
+| rest_to_rest | final_drift | 2.81 | 2.48 |
+| rest_to_rest | max_state_error | 1.90 | 2.04 |
+| high_speed | final_drift | 2.56 | 2.17 |
+| high_speed | max_state_error | 1.76 | 1.97 |
+
+Plot: [`convergence.png`](convergence.png) (log-log, both scenarios, with a slope-2 reference line).
+
+**Findings.**
+- **Trapezoidal collocation is second order, confirmed.** Max state error, fitted over N ≥ 20,
+  has order **2.04** (`rest_to_rest`) and **1.97** (`high_speed`). From N = 40 → 80 → 160 the error
+  drops by 4.0× and 3.9× per doubling in both scenarios, almost exactly the 4× the theory predicts.
+- **The optimizer is not distorting the result.** Max constraint violation is ≤ 9e-13 at every N,
+  at least 8 orders of magnitude below the smallest error measured (1.1e-4 m). The smallest error
+  is also far above the reality check's own floor (about 1e-7).
+- **Coarse grids (N ≤ 15) are not yet in the asymptotic regime.** There the ratios are irregular
+  (for example high_speed 10 → 15 gives 0.8×, meaning the error *grew*). This is why the headline
+  fit uses N ≥ 20. With all N the fit gives 1.90 / 1.76.
+- **Final drift is noisier** (fitted 2.48 / 2.17). It measures a single point, the arm's end
+  position, and errors from different parts of the motion can partly cancel there, so it jumps
+  around (high_speed 30 → 40 is only 1.4×). It still settles to about 4× per doubling at N ≥ 80.
+  Max state error is the more reliable measure of order, because it takes the worst point over the
+  whole trajectory.
+- The trapezoidal optimum itself also changes with N (cost 243.1 at N = 10 → 219.1 at N = 160 for
+  `rest_to_rest`), which is another reason ratios between single pairs of N are not exactly 4×.
+
+**Tests** (2 new, all pass): `fit_order` recovers slopes 2 and 4 on exact data, and on the small test
+problem (N = 20, 40, 80) both error measures have a fitted order between 1.7 and 2.5, with the
+constraint violation < 1e-3 × the error.

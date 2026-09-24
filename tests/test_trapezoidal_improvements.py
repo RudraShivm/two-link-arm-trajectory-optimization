@@ -1,3 +1,4 @@
+import dataclasses
 import unittest
 
 import numpy as np
@@ -5,8 +6,12 @@ import numpy as np
 from arm_opt.analysis.reality_check import perform_reality_check
 from arm_opt.dynamics.parameters import ArmParameters
 from arm_opt.solvers.base import TrajectoryProblem
-from arm_opt.solvers.improved_trapezoidal import ImprovedTrapezoidalSolver, state_derivative_batch
-from arm_opt.solvers.trapezoidal_utils import make_state_interp_fn, trapezoidal_interpolate
+from arm_opt.solvers.improved_trapezoidal import (
+    ImprovedTrapezoidalSolver,
+    solve_with_warm_start,
+    state_derivative_batch,
+)
+from arm_opt.solvers.trapezoidal_utils import fit_order, make_state_interp_fn, trapezoidal_interpolate
 
 
 def small_problem():
@@ -78,6 +83,30 @@ class TestA1Interpolation(unittest.TestCase):
         )
         self.assertEqual(rc_lin.terminal_cartesian_drift, rc_quad.terminal_cartesian_drift)
         self.assertNotEqual(rc_lin.max_state_drift, rc_quad.max_state_drift)
+
+
+class TestA2Convergence(unittest.TestCase):
+    def test_fit_order_recovers_known_slope(self):
+        hs = np.array([0.1, 0.05, 0.025, 0.0125])
+        self.assertAlmostEqual(fit_order(hs, 3.0 * hs**2), 2.0, places=10)
+        self.assertAlmostEqual(fit_order(hs, 0.5 * hs**4), 4.0, places=10)
+
+    def test_trapezoidal_is_second_order(self):
+        hs, state_err, final_drift = [], [], []
+        for n in (20, 40, 80):
+            problem = dataclasses.replace(small_problem(), n_nodes=n)
+            result = solve_with_warm_start(problem, ftol=1e-10)
+            self.assertTrue(result.success)
+            rc = perform_reality_check(problem, result, state_interp_fn=make_state_interp_fn(problem, result))
+            # Optimizer error must be far below the discretization error being measured.
+            self.assertLess(result.max_constraint_violation, 1e-3 * rc.terminal_cartesian_drift)
+            hs.append(problem.dt)
+            state_err.append(rc.max_state_drift)
+            final_drift.append(rc.terminal_cartesian_drift)
+        self.assertGreater(fit_order(hs, state_err), 1.7)
+        self.assertLess(fit_order(hs, state_err), 2.5)
+        self.assertGreater(fit_order(hs, final_drift), 1.7)
+        self.assertLess(fit_order(hs, final_drift), 2.5)
 
 
 if __name__ == "__main__":
