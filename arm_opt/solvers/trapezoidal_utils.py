@@ -67,3 +67,34 @@ def fit_order(hs, errors) -> float:
     """A2: slope of log(error) vs log(h), i.e. the observed order p in error ≈ C·h^p."""
     slope, _ = np.polyfit(np.log(np.asarray(hs, dtype=float)), np.log(np.asarray(errors, dtype=float)), 1)
     return float(slope)
+
+
+def point_segment_distance(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> np.ndarray:
+    """Distance from point c to segments a[i]-b[i]. a, b: (M, 2), c: (2,) -> (M,)."""
+    ab = b - a
+    s = np.clip(np.sum((c - a) * ab, axis=1) / np.sum(ab * ab, axis=1), 0.0, 1.0)
+    closest = a + s[:, None] * ab
+    return np.linalg.norm(closest - c, axis=1)
+
+
+def link_clearances(params, angles: np.ndarray, center, radius: float):
+    """A3: clearance (distance minus radius, metres; < 0 = collision) of each part of the arm.
+
+    Args:
+        params: ArmParameters (link lengths).
+        angles: Joint angles, shape (M, 2) (or states of shape (M, 4)).
+        center, radius: The circular obstacle.
+
+    Returns:
+        dict with arrays of shape (M,): "link1", "link2", "hand".
+    """
+    q = np.atleast_2d(angles)[:, :2]
+    center = np.asarray(center, dtype=float)
+    elbow = np.column_stack([params.l1 * np.cos(q[:, 0]), params.l1 * np.sin(q[:, 0])])
+    hand = elbow + np.column_stack([params.l2 * np.cos(q[:, 0] + q[:, 1]), params.l2 * np.sin(q[:, 0] + q[:, 1])])
+    shoulder = np.zeros_like(elbow)
+    return {
+        "link1": point_segment_distance(shoulder, elbow, center) - radius,
+        "link2": point_segment_distance(elbow, hand, center) - radius,
+        "hand": np.linalg.norm(hand - center, axis=1) - radius,
+    }

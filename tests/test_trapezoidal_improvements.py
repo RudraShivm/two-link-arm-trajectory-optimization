@@ -11,7 +11,14 @@ from arm_opt.solvers.improved_trapezoidal import (
     solve_with_warm_start,
     state_derivative_batch,
 )
-from arm_opt.solvers.trapezoidal_utils import fit_order, make_state_interp_fn, trapezoidal_interpolate
+from arm_opt.dynamics.kinematics import forward_kinematics
+from arm_opt.scenarios.obstacle import ObstacleScenario, segment_clearance_sq
+from arm_opt.solvers.trapezoidal_utils import (
+    fit_order,
+    link_clearances,
+    make_state_interp_fn,
+    trapezoidal_interpolate,
+)
 
 
 def small_problem():
@@ -107,6 +114,52 @@ class TestA2Convergence(unittest.TestCase):
         self.assertLess(fit_order(hs, state_err), 2.5)
         self.assertGreater(fit_order(hs, final_drift), 1.7)
         self.assertLess(fit_order(hs, final_drift), 2.5)
+
+
+class TestA3FullBodyObstacle(unittest.TestCase):
+    def test_segment_clearance_geometry(self):
+        a, b, c = np.array([0.0, 0.0]), np.array([1.0, 0.0]), np.array([0.5, 0.4])
+        # Closest point is the projection (0.5, 0): distance 0.4.
+        self.assertAlmostEqual(segment_clearance_sq(a, b, c, 0.1), 0.4**2 - 0.1**2)
+        # Beyond the end the closest point is b itself (clamped).
+        self.assertAlmostEqual(segment_clearance_sq(a, b, np.array([2.0, 0.0]), 0.0), 1.0)
+        # Center on the segment: fully inside.
+        self.assertAlmostEqual(segment_clearance_sq(a, b, np.array([0.3, 0.0]), 0.2), -0.04)
+
+    def test_link_clearances_match_kinematics(self):
+        rng = np.random.default_rng(1)
+        params = ObstacleScenario().create_problem(n_nodes=5).arm_params
+        q = rng.uniform(-np.pi, np.pi, size=(200, 2))
+        center, radius = np.array([1.2, 0.3]), 0.25
+        c = link_clearances(params, q, center, radius)
+        for i in range(len(q)):
+            elbow, hand = forward_kinematics(q[i], params)
+            self.assertAlmostEqual(c["hand"][i], np.linalg.norm(hand - center) - radius)
+            d1 = np.sqrt(segment_clearance_sq(np.zeros(2), elbow, center, 0.0)) - radius
+            d2 = np.sqrt(segment_clearance_sq(elbow, hand, center, 0.0)) - radius
+            self.assertAlmostEqual(c["link1"][i], d1)
+            self.assertAlmostEqual(c["link2"][i], d2)
+        self.assertTrue(np.all(c["link2"] <= c["hand"] + 1e-12))  # the hand is part of link 2
+
+    def test_default_scenario_unchanged(self):
+        problem = ObstacleScenario().create_problem(n_nodes=10)
+        self.assertEqual(len(problem.path_constraints), 1)
+        x = np.array([0.3, -0.2, 0.0, 0.0])
+        _, p_ee = forward_kinematics(x[:2], problem.arm_params)
+        expected = np.sum((p_ee - np.array([1.2, 0.0])) ** 2) - (0.35 + 0.005) ** 2
+        self.assertAlmostEqual(problem.path_constraints[0](x, np.zeros(2)), expected)
+
+    def test_full_body_solution_is_collision_free(self):
+        scenario = ObstacleScenario(
+            obstacle_center=ObstacleScenario.FULL_BODY_CENTER,
+            obstacle_radius=ObstacleScenario.FULL_BODY_RADIUS,
+            check_full_body=True,
+        )
+        problem = scenario.create_problem(n_nodes=20)
+        result = ImprovedTrapezoidalSolver(problem).solve(max_iter=1000, ftol=1e-8)
+        self.assertTrue(result.success)
+        c = link_clearances(problem.arm_params, result.state, scenario.obs_center, scenario.obs_radius)
+        self.assertGreaterEqual(min(c["link1"].min(), c["link2"].min()), -1e-6)
 
 
 if __name__ == "__main__":

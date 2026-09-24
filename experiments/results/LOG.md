@@ -217,3 +217,79 @@ Plot: [`convergence.png`](convergence.png) (log-log, both scenarios, with a slop
 **Tests** (2 new, all pass): `fit_order` recovers slopes 2 and 4 on exact data, and on the small test
 problem (N = 20, 40, 80) both error measures have a fitted order between 1.7 and 2.5, with the
 constraint violation < 1e-3 × the error.
+
+### A3: Whole-arm obstacle check
+
+**What changed.**
+- [`arm_opt/scenarios/obstacle.py`](../../arm_opt/scenarios/obstacle.py): new flag
+  `check_full_body=False`. When it is on, the hand-only constraint is replaced by one constraint
+  per link: the **exact** squared distance from the obstacle center to the link segment (the
+  projection clamped to [0, 1]), minus (r + 5 mm)². Link 2 ends at the hand, so it also covers the
+  hand. The exact distance has no gaps, unlike sample points along the link (the plan's sample
+  points 0.25 apart could let the circle dig in by about 0.03 m). It adds 2 rows per node, and each
+  row uses only node k, so `row_nodes = (k,)` and the sparse Jacobian covers it automatically.
+- **Defaults are unchanged** (obstacle (1.2, 0), r = 0.35, hand-only), so the benchmark and the
+  other solvers behave exactly as before. The new obstacle is available as
+  `ObstacleScenario.FULL_BODY_CENTER` / `FULL_BODY_RADIUS` and only used when asked for.
+- [`trapezoidal_utils.py`](../../arm_opt/solvers/trapezoidal_utils.py): `link_clearances()`
+  measures the clearance of link 1, link 2 and the hand (negative = collision).
+- Script: [`experiments/obstacle_checks.py`](../obstacle_checks.py). Clearance is measured on the
+  A1 quadratic interpolant at 3000 time samples, so it also sees between-node motion.
+
+**Part 1: the bug in the original scenario** (N = 30, warm start):
+[`obstacle_bug_original.png`](obstacle_bug_original.png)
+- The solver succeeds (cost 239.2) and the hand stays outside **at the nodes** (+0.005 m).
+- But **both links pass through the obstacle**: minimum clearance −0.150 m for link 1 and link 2,
+  with a link inside the obstacle at 5 of the 31 nodes.
+- Between nodes even the hand goes 0.015 m inside (this is corner cutting, which A4 addresses).
+- With the whole-arm check on this obstacle the problem is **infeasible** (success = False, max
+  violation 19.1). As predicted in the plan: the arm must pass θ1 = 0, where link 1 lies on the
+  x-axis only 0.2 m from the obstacle's center.
+
+**Choosing the new obstacle.** The plan's candidate (1.6, 0), r = 0.3 turned out to be useless for
+the demo: the minimum-effort arm never goes near it (link 2 clearance +0.216 m even with the hand-only
+check), so hand-only and whole-arm give the same answer. A search over centers and radii
+(conditions: link 1 can never reach it, the hand-only solution shows the bug, and the whole-arm solve
+works for every N and start) picked **(1.5, −0.3), r = 0.3**. Link 1 can never touch it
+(1.53 − 0.3 = 1.23 m > l1 = 1 m). (1.35, 0.25) also showed the bug, but its whole-arm solve failed at
+N = 20 and N = 40, so it was rejected.
+
+**Part 2: before vs after on the new obstacle**:
+[`obstacle_full_body.png`](obstacle_full_body.png) (cold start, N = 30)
+
+| N | start | check | success | cost | min link clearance (dense) | solve time |
+|---|---|---|---|---|---|---|
+| 20 | cold | hand only | True | 417.2 | −0.300 m ❌ | 8.3 s |
+| 20 | cold | whole arm | True | 172.5 | +0.230 m | 2.2 s |
+| 20 | warm | hand only | True | 172.5 | +0.230 m | 2.0 s |
+| 20 | warm | whole arm | True | 172.5 | +0.230 m | 9.0 s |
+| 30 | cold | hand only | True | 414.8 | −0.300 m ❌ | 15.2 s |
+| 30 | cold | whole arm | True | 171.4 | +0.230 m | 3.1 s |
+| 30 | warm | hand only | True | 171.4 | +0.230 m | 4.8 s |
+| 30 | warm | whole arm | True | 171.4 | +0.230 m | 3.2 s |
+| 40 | cold | hand only | True | 394.7 | −0.299 m ❌ | 13.3 s |
+| 40 | cold | whole arm | True | 171.0 | +0.230 m | 6.8 s |
+| 40 | warm | hand only | True | 171.0 | +0.230 m | 3.2 s |
+| 40 | warm | whole arm | True | 171.0 | +0.230 m | 10.8 s |
+
+**Findings.**
+- **With the hand-only check, "success = True" does not mean collision-free.** From a cold start
+  (the way the original benchmark runs the solver) all 3 hand-only runs swing the hand around the
+  outside of the obstacle while **link 2 cuts through its center** (−0.30 m = the full radius).
+- **The whole-arm check gives a collision-free path every time** (6/6: all N, cold and warm), with
+  +0.23 m clearance. The arm folds its elbow and passes inside the obstacle.
+- The hand-only problem has **two local minima**: the colliding "swing around" path (cost about 400) and
+  the folded path (cost about 171). Warm start happens to find the folded one, which avoids the obstacle
+  by luck, not because anything checks the links. The whole-arm check removes the colliding
+  minimum, so the result no longer depends on the starting guess.
+- Solve time: the whole-arm check adds 2 constraint rows per node instead of 1. It is *faster* than
+  hand-only for cold start (the colliding minimum was expensive to reach) and 1–3× slower for warm start.
+- The whole-arm constraint is still only enforced **at nodes**. A4 checks the midpoints too.
+
+**Tests** (4 new, all pass): segment-distance geometry (projection and clamping), `link_clearances`
+matches forward kinematics on 200 random poses, the default scenario is unchanged (1 constraint, same
+value), and the whole-arm solution on the new obstacle (N = 20) succeeds with node clearance ≥ −1e-6.
+
+**⚠ Tell the team:** the shared `ObstacleScenario` gained a flag but its defaults are untouched.
+If the team wants the whole-arm check in the main benchmark, all three solvers must switch to the new
+obstacle together, because the old one is infeasible with it.
