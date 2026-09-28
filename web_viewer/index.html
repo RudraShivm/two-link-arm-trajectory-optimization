@@ -4,12 +4,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Two-Link Robot Arm Trajectory Optimization &bull; Research Console</title>
-
-  <!-- Catppuccin Mocha Stylesheet -->
+  <title>Two-Link Arm Trajectory Optimization</title>
   <link rel="stylesheet" href="style.css">
-
-  <!-- KaTeX for Beautiful Academic Mathematics -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
@@ -22,18 +18,16 @@
     <header class="topbar">
       <div class="brand-section">
         <h1 class="brand-title">Two-Link Robot Arm Trajectory Optimization</h1>
-        <span class="brand-subtitle">Comparative Benchmark: Single Shooting vs. Trapezoidal vs. Hermite-Simpson
-          Collocation</span>
+        <span class="brand-subtitle">Shooting vs Trapezoidal vs Hermite–Simpson</span>
       </div>
 
       <div class="topbar-center">
         <span class="scenario-select-label">Scenario:</span>
         <select id="scenario-selector" class="scenario-dropdown">
-          <option value="rest_to_rest">Rest-to-Rest Baseline</option>
-          <option value="obstacle">Cartesian Obstacle Avoidance</option>
-          <option value="high_speed">High-Speed Coriolis Maneuver</option>
-          <option value="under_torqued">Under-Torqued Inversion (Energy Pumping)</option>
-          <option value="reversal">180&deg; Inversion Across Singularity</option>
+          <option value="rest_to_rest">Rest-to-Rest</option>
+          <option value="obstacle">Obstacle Avoidance</option>
+          <option value="high_speed">High-Speed</option>
+          <option value="swing_up">Swing-Up</option>
         </select>
       </div>
 
@@ -53,27 +47,23 @@
       </div>
     </header>
 
-    <!-- Pipeline Navigation Strip -->
     <nav class="pipeline-nav">
-      <button class="nav-tab active" data-tab="tab-workspace">Workspace &amp; Kinematics</button>
-      <button class="nav-tab" data-tab="tab-phase">State Space &amp; Phase Portraits</button>
-      <button class="nav-tab" data-tab="tab-torques">Dynamic Torques &amp; Power</button>
-      <button class="nav-tab" data-tab="tab-energy">Energy Conservation &amp; Hamiltonian</button>
-      <button class="nav-tab" data-tab="tab-reality">Physical Reality Check (ODE Drift)</button>
-      <button class="nav-tab" data-tab="tab-audit">Comparative Audit Matrix</button>
-      <button class="nav-tab" data-tab="tab-theory">Mathematical Formulations</button>
+      <button class="nav-tab active" data-tab="tab-workspace">Workspace</button>
+      <button class="nav-tab" data-tab="tab-phase">Phase portraits</button>
+      <button class="nav-tab" data-tab="tab-torques">Torques &amp; power</button>
+      <button class="nav-tab" data-tab="tab-energy">Energy</button>
+      <button class="nav-tab" data-tab="tab-reality">ODE reality check</button>
+      <button class="nav-tab" data-tab="tab-audit">Comparison table</button>
+      <button class="nav-tab" data-tab="tab-theory">Formulations</button>
     </nav>
 
-    <!-- Main Application Layout -->
     <div class="layout">
-      <!-- Left Rail: Control & Telemetry -->
       <aside class="rail">
-        <!-- Scenario Information Card -->
         <div class="card">
-          <span class="eyebrow">Active Benchmark</span>
+          <span class="eyebrow">Scenario</span>
           <h2 id="scenario-title">Rest-to-Rest Baseline</h2>
           <p id="scenario-desc">
-            Moving from horizontal extension to upright vertical under 30 N&bull;m torque bounds.
+            Horizontal to upright under 30 N&bull;m torque bounds.
           </p>
           <div
             style="display: flex; gap: 12px; margin-top: 8px; font-family: var(--font-mono); font-size: 0.68rem; color: var(--subtext0);">
@@ -83,9 +73,8 @@
           </div>
         </div>
 
-        <!-- Master Playback Controls -->
         <div class="card playback-cluster">
-          <span class="eyebrow">Playback Engine</span>
+          <span class="eyebrow">Playback</span>
           <div class="playback-buttons">
             <button id="btn-play-pause" class="btn primary">&#9654; Play</button>
             <button id="btn-step-back" class="btn" title="Step Back">&#9664;</button>
@@ -107,9 +96,8 @@
           </div>
         </div>
 
-        <!-- Active Methods & Visual Layers -->
         <div class="card">
-          <span class="eyebrow">Method Filters &amp; Focus</span>
+          <span class="eyebrow">Methods</span>
           <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px;">
             <div class="method-row">
               <label class="method-row-left">
@@ -149,23 +137,22 @@
             style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
             <label
               style="display: flex; align-items: center; gap: 8px; font-size: 0.78rem; cursor: pointer; color: var(--subtext0);">
-              <input type="checkbox" id="layer-trails" checked> End-Effector Fading Trails
+              <input type="checkbox" id="layer-trails" checked> End-effector trails
             </label>
             <label
               style="display: flex; align-items: center; gap: 8px; font-size: 0.78rem; cursor: pointer; color: var(--subtext0);">
-              <input type="checkbox" id="layer-ghosts" checked> Target &amp; Initial Ghost Poses
+              <input type="checkbox" id="layer-ghosts" checked> Initial / target poses
             </label>
             <label
               style="display: flex; align-items: center; gap: 8px; font-size: 0.78rem; cursor: pointer; color: var(--subtext0);">
-              <input type="checkbox" id="layer-com" checked> Link Centers of Mass
+              <input type="checkbox" id="layer-com" checked> Centers of mass
             </label>
           </div>
         </div>
 
-        <!-- Real-Time Kinematic Telemetry -->
         <div class="card">
           <div class="card-title">
-            <span class="eyebrow">Live Telemetry</span>
+            <span class="eyebrow">Telemetry</span>
             <span id="tel-method-badge" class="badge badge-hermite" style="font-size: 0.65rem;">Hermite-Simpson</span>
           </div>
 
@@ -204,7 +191,6 @@
             </div>
           </div>
 
-          <!-- Actuator Torque Meters -->
           <div class="torque-meter" style="margin-top: 10px;">
             <div class="torque-meter-hd">
               <span>Joint 1 Torque &tau;1</span>
@@ -229,128 +215,107 @@
         </div>
       </aside>
 
-      <!-- Main Central View Stage -->
       <main class="stage">
-        <!-- View 1: Kinematic Canvas & Workspace -->
         <div id="tab-workspace" class="panel-view active">
           <canvas id="canvas-workspace"></canvas>
           <div class="canvas-overlay-hud">
             <div>Clock: <strong id="hud-clock">t = 0.00s</strong></div>
             <div>EE Pos: <strong id="hud-ee-pos">[2.000, 0.000]</strong></div>
-            <div>Total Effort: <strong id="hud-effort">217.79</strong></div>
+            <div>Total Effort: <strong id="hud-effort">—</strong></div>
           </div>
         </div>
 
-        <!-- View 2: Phase Portraits -->
         <div id="tab-phase" class="panel-view">
           <div class="analysis-container">
             <div>
-              <span class="eyebrow">State Space Representation</span>
-              <h2>Phase Portraits (&theta; vs d&theta;/dt)</h2>
-              <p>
-                Continuous state space orbits showing joint angles versus angular velocities. Closed or smoothly
-                converging loops demonstrate stable orbital convergence to target states.
-              </p>
+              <span class="eyebrow">State space</span>
+              <h2>Phase portraits (&theta; vs d&theta;/dt)</h2>
+              <p>Joint angle versus angular velocity for each method.</p>
             </div>
             <div class="chart-grid">
               <div class="chart-card">
-                <span class="eyebrow">Joint 1 Phase Space</span>
+                <span class="eyebrow">Joint 1</span>
                 <canvas id="chart-phase-j1" class="chart-canvas"></canvas>
               </div>
               <div class="chart-card">
-                <span class="eyebrow">Joint 2 Phase Space</span>
+                <span class="eyebrow">Joint 2</span>
                 <canvas id="chart-phase-j2" class="chart-canvas"></canvas>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- View 3: Dynamic Torques & Power Decomposition -->
         <div id="tab-torques" class="panel-view">
           <div class="analysis-container">
             <div>
-              <span class="eyebrow">Equations of Motion Decomposition</span>
-              <h2>Dynamic Torques: M(q)&ddot;q + C(q,dq)dq + g(q) = &tau;</h2>
-              <p>
-                Decomposes total actuator effort into Inertial acceleration torque, nonlinear Coriolis/centrifugal
-                velocity coupling, and configuration-dependent gravitational loading.
-              </p>
+              <span class="eyebrow">Dynamics</span>
+              <h2>M(q)&ddot;q + C(q,dq)dq + g(q) = &tau;</h2>
+              <p>Inertial, Coriolis/centrifugal, and gravity torque components.</p>
             </div>
             <div class="chart-grid">
               <div class="chart-card">
-                <span class="eyebrow">Joint 1 Torque History</span>
+                <span class="eyebrow">Joint 1 torque</span>
                 <canvas id="chart-torque-j1" class="chart-canvas"></canvas>
               </div>
               <div class="chart-card">
-                <span class="eyebrow">Joint 2 Torque History</span>
+                <span class="eyebrow">Joint 2 torque</span>
                 <canvas id="chart-torque-j2" class="chart-canvas"></canvas>
               </div>
             </div>
             <div class="chart-card">
-              <span class="eyebrow">Instantaneous Mechanical Power P(t) = &tau;1*d&theta;1 + &tau;2*d&theta;2</span>
+              <span class="eyebrow">Power P = &tau;&middot;dq</span>
               <canvas id="chart-power" class="chart-canvas" style="height: 190px;"></canvas>
             </div>
           </div>
         </div>
 
-        <!-- View 4: Energy Conservation & Hamiltonian -->
         <div id="tab-energy" class="panel-view">
           <div class="analysis-container">
             <div>
-              <span class="eyebrow">Hamiltonian Mechanics</span>
-              <h2>Mechanical Energy: T(q, dq) + V(q) = E</h2>
+              <span class="eyebrow">Energy</span>
+              <h2>T + V</h2>
               <p>
-                Monitors kinetic energy $T = \frac{1}{2} \dot{\mathbf{q}}^T M(\mathbf{q}) \dot{\mathbf{q}}$ and
-                gravitational potential energy $V(\mathbf{q})$ across the optimization trajectory.
+                Kinetic $T = \frac{1}{2}\dot{q}^T M(q)\dot{q}$ and potential $V(q)$.
               </p>
             </div>
             <div class="chart-card">
-              <span class="eyebrow">Energy Breakdown Over Time</span>
+              <span class="eyebrow">Energy over time</span>
               <canvas id="chart-energy" class="chart-canvas" style="height: 290px;"></canvas>
             </div>
           </div>
         </div>
 
-        <!-- View 5: Reality Check & ODE Integration Drift -->
         <div id="tab-reality" class="panel-view">
           <div class="analysis-container">
             <div>
-              <span class="eyebrow">Continuous Physical Validation</span>
-              <h2>The Physical Reality Check (Continuous ODE Drift)</h2>
+              <span class="eyebrow">Open-loop replay</span>
+              <h2>ODE reality check (DOP853)</h2>
               <p>
-                Replays optimal controls $\boldsymbol{\tau}^*(t)$ through an independent 8th-order Runge-Kutta
-                Dormand-Prince integrator (DOP853, absolute/relative tol = $10^{-8}$) to measure true continuous
-                end-effector tracking drift $\|p_{ee}^{\text{sim}}(t) - p_{ee}^{\text{opt}}(t)\|_2$.
+                Replay $\tau^*(t)$ with DOP853 (rtol=atol=$10^{-8}$) and measure
+                $\|p_{ee}^{\mathrm{sim}}(t) - p_{ee}^{\mathrm{opt}}(t)\|$.
               </p>
             </div>
             <div class="chart-card">
-              <span class="eyebrow">Cartesian End-Effector Drift vs Continuous Simulation (meters)</span>
+              <span class="eyebrow">End-effector drift (m)</span>
               <canvas id="chart-drift" class="chart-canvas" style="height: 280px;"></canvas>
             </div>
             <div class="card"
               style="background-color: var(--surface0); border: 1px solid var(--border-light); margin-top: 4px;">
-              <h3 style="color: var(--blue); font-size: 0.9rem; margin-bottom: 6px;">Why Collocation Dramatically
-                Outperforms Single Shooting on Continuous Replay</h3>
+              <h3 style="color: var(--blue); font-size: 0.9rem; margin-bottom: 6px;">Note</h3>
               <p style="font-size: 0.82rem; color: var(--subtext0); line-height: 1.6;">
-                Single shooting treats control inputs as open-loop discrete piecewise-constant commands. Small
-                integration deviations compound exponentially over time (&Delta;x &prop; e<sup>&lambda;t</sup>). Direct
-                collocation methods enforce dynamic continuity at every mesh node via defect equality constraints,
-                producing robust trajectories with zero compounding drift.
+                Collocation defects hold only at mesh nodes. Open-loop replay with an independent
+                integrator measures how much the discrete solution drifts from continuous dynamics.
               </p>
             </div>
           </div>
         </div>
 
-        <!-- View 6: Comparative Audit Matrix -->
         <div id="tab-audit" class="panel-view">
           <div class="analysis-container">
             <div>
-              <span class="eyebrow">Quantitative Benchmarking</span>
-              <h2>Comparative Solver Audit Matrix</h2>
-              <p>
-                Empirical metrics comparing CPU runtime, sequential quadratic programming iterations, control effort,
-                actuator peak torque, and physical continuous replay drift.
-              </p>
+              <span class="eyebrow">Results</span>
+              <h2>Comparison table</h2>
+              <p>Runtime, iterations, effort, peak torque, and replay drift.</p>
             </div>
             <div class="card" style="padding: 0; overflow: hidden;">
               <table class="data-table">
@@ -368,168 +333,132 @@
                   </tr>
                 </thead>
                 <tbody id="audit-table-body">
-                  <!-- Populated by JavaScript -->
                 </tbody>
               </table>
             </div>
           </div>
         </div>
 
-        <!-- View 7: Mathematical Formulations -->
         <div id="tab-theory" class="panel-view">
           <div class="analysis-container">
             <div>
-              <span class="eyebrow">Mathematical &amp; Theoretical Foundations</span>
-              <h2>Trajectory Optimization Formulations &amp; Defect Equations</h2>
+              <span class="eyebrow">Theory</span>
+              <h2>Formulations</h2>
               <p>
-                Rigorous mathematical formulation of the two-link planar robotic arm and direct transcription methods
-                based on Cardona-Ortiz &amp; Arechavaleta (2025) and Matthew Kelly (SIAM Review 2017).
+                Two-link planar arm and direct transcription (Cardona-Ortiz &amp; Arechavaleta 2025;
+                Kelly, SIAM Review 2017).
               </p>
             </div>
 
-            <!-- Card 0: Manipulator Dynamics -->
             <div class="math-card dynamics">
               <div class="math-title">
                 <span class="badge"
                   style="background: rgba(148,226,213,0.15); color: var(--teal); border-color: rgba(148,226,213,0.3);">Dynamics</span>
-                Two-Link Planar Manipulator Dynamics (Euler-Lagrange)
+                Two-link planar manipulator
               </div>
               <div class="math-desc">
-                Generalized coordinates $\mathbf{q} = [\theta_1, \theta_2]^T \in \mathbb{R}^2$, state vector $\mathbf{x}
-                = [\mathbf{q}^T, \dot{\mathbf{q}}^T]^T \in \mathbb{R}^4$, and actuator control torque $\boldsymbol{\tau}
-                = [\tau_1, \tau_2]^T \in \mathbb{R}^2$.
+                $q=[\theta_1,\theta_2]^T$, $x=[q^T,\dot{q}^T]^T$, $\tau=[\tau_1,\tau_2]^T$.
               </div>
               <div class="math-eq-box">
-                $$M(\mathbf{q})\ddot{\mathbf{q}} + C(\mathbf{q}, \dot{\mathbf{q}})\dot{\mathbf{q}} +
-                \mathbf{g}(\mathbf{q}) = \boldsymbol{\tau}$$
-                $$M(\mathbf{q}) = \begin{bmatrix}
-                I_1 + I_2 + m_1 r_1^2 + m_2 (l_1^2 + r_2^2 + 2 l_1 r_2 \cos\theta_2) & I_2 + m_2 (r_2^2 + l_1 r_2
-                \cos\theta_2) \\
-                I_2 + m_2 (r_2^2 + l_1 r_2 \cos\theta_2) & I_2 + m_2 r_2^2
+                $$M(q)\ddot{q} + C(q,\dot{q})\dot{q} + g(q) = \tau$$
+                $$M(q)=\begin{bmatrix}
+                I_1+I_2+m_1 r_1^2+m_2(l_1^2+r_2^2+2l_1 r_2\cos\theta_2) & I_2+m_2(r_2^2+l_1 r_2\cos\theta_2)\\
+                I_2+m_2(r_2^2+l_1 r_2\cos\theta_2) & I_2+m_2 r_2^2
                 \end{bmatrix}$$
-                $$C(\mathbf{q}, \dot{\mathbf{q}})\dot{\mathbf{q}} = \begin{bmatrix} -m_2 l_1 r_2 \sin\theta_2
-                (2\dot{\theta}_1 \dot{\theta}_2 + \dot{\theta}_2^2) \\ m_2 l_1 r_2 \sin\theta_2 \dot{\theta}_1^2
-                \end{bmatrix}, \quad \mathbf{g}(\mathbf{q}) = \begin{bmatrix} (m_1 r_1 + m_2 l_1) g \cos\theta_1 + m_2
-                r_2 g \cos(\theta_1 + \theta_2) \\ m_2 r_2 g \cos(\theta_1 + \theta_2) \end{bmatrix}$$
+                $$C(q,\dot{q})\dot{q}=\begin{bmatrix}-m_2 l_1 r_2\sin\theta_2(2\dot{\theta}_1\dot{\theta}_2+\dot{\theta}_2^2)\\
+                m_2 l_1 r_2\sin\theta_2\dot{\theta}_1^2\end{bmatrix},\quad
+                g(q)=\begin{bmatrix}(m_1 r_1+m_2 l_1)g\cos\theta_1+m_2 r_2 g\cos(\theta_1+\theta_2)\\
+                m_2 r_2 g\cos(\theta_1+\theta_2)\end{bmatrix}$$
               </div>
               <div class="math-details-grid">
                 <div class="math-detail-item">
-                  <span class="math-detail-label">End-Effector Forward Kinematics</span>
-                  <span class="math-detail-val">$\mathbf{p}_{ee} = [l_1 \cos\theta_1 + l_2 \cos(\theta_1+\theta_2), \;
-                    l_1 \sin\theta_1 + l_2 \sin(\theta_1+\theta_2)]^T$</span>
+                  <span class="math-detail-label">Forward kinematics</span>
+                  <span class="math-detail-val">$p_{ee}=[l_1\cos\theta_1+l_2\cos(\theta_1+\theta_2),\;
+                    l_1\sin\theta_1+l_2\sin(\theta_1+\theta_2)]^T$</span>
                 </div>
                 <div class="math-detail-item">
-                  <span class="math-detail-label">Continuous Optimal Control Objective</span>
-                  <span class="math-detail-val">$\min_{\boldsymbol{\tau}} J = \int_0^T \|\boldsymbol{\tau}(t)\|_2^2 \,
-                    dt \quad \text{s.t.} \quad |\tau_i(t)| \le \tau_{\max}$</span>
+                  <span class="math-detail-label">Objective</span>
+                  <span class="math-detail-val">$\min\int_0^T\|\tau(t)\|_2^2\,dt$ subject to $|\tau_i|\le\tau_{\max}$</span>
                 </div>
               </div>
             </div>
 
-            <!-- Card 1: Single Shooting -->
             <div class="math-card shooting">
               <div class="math-title">
                 <span class="badge badge-shooting">Method 1</span>
-                Single Direct Shooting (Runge-Kutta 4th Order)
+                Single shooting (RK4)
               </div>
               <div class="math-desc">
-                Decision variables are exclusively parameterized controls $\mathbf{z} = [\boldsymbol{\tau}_0,
-                \boldsymbol{\tau}_1, \dots, \boldsymbol{\tau}_{N-1}]^T \in \mathbb{R}^{2N}$. States are generated
-                sequentially forward in time via explicit RK4 simulation:
+                $z=[\tau_0,\ldots,\tau_{N-1}]^T\in\mathbb{R}^{2N}$. States from forward RK4; terminal constraint $x_N=x_f$.
               </div>
               <div class="math-eq-box">
-                $$\mathbf{x}_{k+1} = \mathbf{x}_k + \frac{h}{6}(\mathbf{k}_1 + 2\mathbf{k}_2 + 2\mathbf{k}_3 +
-                \mathbf{k}_4)$$
-                $$\mathbf{k}_1 = \mathbf{f}(\mathbf{x}_k, \boldsymbol{\tau}_k), \quad \mathbf{k}_2 =
-                \mathbf{f}\left(\mathbf{x}_k + \frac{h}{2}\mathbf{k}_1, \boldsymbol{\tau}_k\right), \quad \mathbf{k}_3 =
-                \mathbf{f}\left(\mathbf{x}_k + \frac{h}{2}\mathbf{k}_2, \boldsymbol{\tau}_k\right), \quad \mathbf{k}_4 =
-                \mathbf{f}(\mathbf{x}_k + h\mathbf{k}_3, \boldsymbol{\tau}_k)$$
-                $$\text{Boundary Equality Constraint: } \mathbf{x}_N - \mathbf{x}_{\text{target}} = \mathbf{0} \in
-                \mathbb{R}^4$$
+                $$x_{k+1}=x_k+\frac{h}{6}(k_1+2k_2+2k_3+k_4)$$
+                $$k_1=f(x_k,\tau_k),\quad
+                k_2=f(x_k+\tfrac{h}{2}k_1,\tau_k),\quad
+                k_3=f(x_k+\tfrac{h}{2}k_2,\tau_k),\quad
+                k_4=f(x_k+h k_3,\tau_k)$$
               </div>
               <div class="math-details-grid">
                 <div class="math-detail-item">
-                  <span class="math-detail-label">Decision Variable Count</span>
-                  <span class="math-detail-val">$\dim(\mathbf{z}) = 2N$ (Controls only)</span>
+                  <span class="math-detail-label">Decision size</span>
+                  <span class="math-detail-val">$2N$ (controls only)</span>
                 </div>
                 <div class="math-detail-item">
-                  <span class="math-detail-label">Jacobian Structure</span>
-                  <span class="math-detail-val">Dense, ill-conditioned ($\kappa \propto e^{\lambda T}$)</span>
-                </div>
-                <div class="math-detail-item">
-                  <span class="math-detail-label">Obstacle Handling</span>
-                  <span class="math-detail-val">High penalty sensitivity at discrete sample points</span>
+                  <span class="math-detail-label">Jacobian</span>
+                  <span class="math-detail-val">Dense terminal map</span>
                 </div>
               </div>
             </div>
 
-            <!-- Card 2: Trapezoidal Collocation -->
             <div class="math-card trapezoidal">
               <div class="math-title">
                 <span class="badge badge-trapezoidal">Method 2</span>
-                Trapezoidal Direct Collocation ($O(h^2)$ 2nd-Order Collocation)
+                Trapezoidal collocation
               </div>
               <div class="math-desc">
-                Both states and controls are simultaneous decision variables at every mesh node: $\mathbf{z} =
-                [\mathbf{x}_0, \boldsymbol{\tau}_0, \mathbf{x}_1, \boldsymbol{\tau}_1, \dots, \mathbf{x}_N,
-                \boldsymbol{\tau}_N]^T \in \mathbb{R}^{6(N+1)}$. Dynamics are converted into implicit algebraic defect
-                equality constraints:
+                $z=[x_0,\tau_0,\ldots,x_N,\tau_N]^T\in\mathbb{R}^{6(N+1)}$. Defects:
               </div>
               <div class="math-eq-box">
-                $$\boldsymbol{\zeta}_k = \mathbf{x}_{k+1} - \mathbf{x}_k - \frac{h_k}{2}\left[\mathbf{f}(\mathbf{x}_k,
-                \boldsymbol{\tau}_k) + \mathbf{f}(\mathbf{x}_{k+1}, \boldsymbol{\tau}_{k+1})\right] = \mathbf{0}, \quad
-                k = 0, \dots, N-1$$
-                $$\text{Objective Quadrature: } J = \sum_{k=0}^{N-1} \frac{h_k}{2}\left(\|\boldsymbol{\tau}_k\|_2^2 +
-                \|\boldsymbol{\tau}_{k+1}\|_2^2\right)$$
-                $$\text{Path Constraint: } \|\mathbf{p}_{ee}(\mathbf{q}_k) - \mathbf{p}_{\text{obs}}\|_2 \ge
-                r_{\text{obs}} + r_{\text{margin}}, \quad \forall k$$
+                $$\zeta_k=x_{k+1}-x_k-\frac{h}{2}\big(f(x_k,\tau_k)+f(x_{k+1},\tau_{k+1})\big)=0$$
+                $$J=\sum_{k=0}^{N-1}\frac{h}{2}\big(\|\tau_k\|_2^2+\|\tau_{k+1}\|_2^2\big)$$
               </div>
               <div class="math-details-grid">
                 <div class="math-detail-item">
-                  <span class="math-detail-label">Decision Variable Count</span>
-                  <span class="math-detail-val">$\dim(\mathbf{z}) = 6(N+1)$ (States + Controls)</span>
+                  <span class="math-detail-label">Decision size</span>
+                  <span class="math-detail-val">$6(N+1)$</span>
                 </div>
                 <div class="math-detail-item">
-                  <span class="math-detail-label">Defect Constraints</span>
-                  <span class="math-detail-val">$4N$ equality constraints</span>
+                  <span class="math-detail-label">Defects</span>
+                  <span class="math-detail-val">$4N$ equalities</span>
                 </div>
                 <div class="math-detail-item">
-                  <span class="math-detail-label">Jacobian Structure</span>
-                  <span class="math-detail-val">Block-banded sparse, highly scalable</span>
+                  <span class="math-detail-label">Order</span>
+                  <span class="math-detail-val">$O(h^2)$ global</span>
                 </div>
               </div>
             </div>
 
-            <!-- Card 3: Hermite-Simpson Collocation -->
             <div class="math-card hermite">
               <div class="math-title">
                 <span class="badge badge-hermite">Method 3</span>
-                Hermite-Simpson Direct Collocation ($O(h^4)$ Separated Form)
+                Hermite–Simpson collocation
               </div>
               <div class="math-desc">
-                Higher-order direct collocation evaluating states and controls at mesh nodes $t_k$ and interval
-                midpoints $t_{k+1/2}$. Employs cubic Hermite state interpolation and Simpson quadrature:
+                Nodes and midpoints. Hermite midpoint interpolant plus Simpson defect:
               </div>
               <div class="math-eq-box">
-                $$\text{Hermite Midpoint: } \mathbf{x}_{k+1/2} = \frac{1}{2}(\mathbf{x}_k + \mathbf{x}_{k+1}) +
-                \frac{h_k}{8}\left[\mathbf{f}_k - \mathbf{f}_{k+1}\right]$$
-                $$\text{Simpson Defect: } \boldsymbol{\zeta}_k = \mathbf{x}_{k+1} - \mathbf{x}_k -
-                \frac{h_k}{6}\left[\mathbf{f}_k + 4\mathbf{f}_{k+1/2} + \mathbf{f}_{k+1}\right] = \mathbf{0}$$
-                $$\text{Objective Quadrature: } J = \sum_{k=0}^{N-1} \frac{h_k}{6}\left(\|\boldsymbol{\tau}_k\|_2^2 +
-                4\|\boldsymbol{\tau}_{k+1/2}\|_2^2 + \|\boldsymbol{\tau}_{k+1}\|_2^2\right)$$
+                $$x_{k+1/2}=\frac{1}{2}(x_k+x_{k+1})+\frac{h}{8}(f_k-f_{k+1})$$
+                $$\zeta_k=x_{k+1}-x_k-\frac{h}{6}(f_k+4f_{k+1/2}+f_{k+1})=0$$
+                $$J=\sum_{k=0}^{N-1}\frac{h}{6}\big(\|\tau_k\|_2^2+4\|\tau_{k+1/2}\|_2^2+\|\tau_{k+1}\|_2^2\big)$$
               </div>
               <div class="math-details-grid">
                 <div class="math-detail-item">
-                  <span class="math-detail-label">Truncation Error</span>
-                  <span class="math-detail-val">$O(h^4)$ 4th-Order Accuracy</span>
+                  <span class="math-detail-label">Order</span>
+                  <span class="math-detail-val">$O(h^4)$ global</span>
                 </div>
                 <div class="math-detail-item">
-                  <span class="math-detail-label">Midpoint Evaluation</span>
-                  <span class="math-detail-val">Evaluated at mesh midpoints $t_k + h_k/2$</span>
-                </div>
-                <div class="math-detail-item">
-                  <span class="math-detail-label">Continuous Tracking Fidelity</span>
-                  <span class="math-detail-val">Lowest drift on continuous 8th-order DOP853 replay</span>
+                  <span class="math-detail-label">Midpoints</span>
+                  <span class="math-detail-val">Evaluated at $t_k+h/2$</span>
                 </div>
               </div>
             </div>
@@ -542,7 +471,6 @@
 
   <script src="viewer.js"></script>
   <script>
-    // Ensure KaTeX renders math when script is loaded or when tabs switch
     function triggerKaTeX() {
       if (window.renderMathInElement) {
         renderMathInElement(document.body, {
@@ -557,7 +485,6 @@
     window.addEventListener("DOMContentLoaded", () => {
       setTimeout(triggerKaTeX, 300);
     });
-    // Re-render KaTeX when the mathematical formulations tab is clicked
     document.querySelectorAll(".nav-tab").forEach(tab => {
       tab.addEventListener("click", () => {
         if (tab.dataset.tab === "tab-theory") {

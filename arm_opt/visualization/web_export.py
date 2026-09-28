@@ -1,5 +1,3 @@
-"""Exports comprehensive scenario data, high-density telemetry, and physical decompositions to JSON."""
-
 import json
 from typing import Dict, Optional, Tuple, Any
 import numpy as np
@@ -16,7 +14,6 @@ def build_scenario_dict(
     scenario_name: str = "Trajectory Optimization",
     scenario_desc: str = "",
 ) -> Dict[str, Any]:
-    """Compiles deep physical telemetry and metrics for a scenario."""
     arm = problem.arm
     params = problem.arm_params
     _, target_ee = forward_kinematics(problem.xf[:2], params)
@@ -96,10 +93,6 @@ def build_scenario_dict(
             power_j1[i] = tau[i, 0] * dq[i, 0]
             power_j2[i] = tau[i, 1] * dq[i, 1]
 
-        total_energy = kinetic_energy + potential_energy
-        power_total = power_j1 + power_j2
-
-        # Reality check simulation drift
         reality_data = None
         if res.success:
             rc = perform_reality_check(problem, res, num_eval_points=100)
@@ -108,7 +101,6 @@ def build_scenario_dict(
                 _, p_sim = forward_kinematics(rc.x_sim[j, :2], params)
                 _, p_opt = forward_kinematics(rc.x_opt_interp[j, :2], params)
                 ee_drift_sampled.append(float(np.linalg.norm(p_sim - p_opt)))
-
             reality_data = {
                 "t_sim": rc.t_sim.tolist(),
                 "ee_drift": ee_drift_sampled,
@@ -116,9 +108,7 @@ def build_scenario_dict(
                 "terminal_drift": float(rc.terminal_cartesian_drift),
             }
 
-        # Quantitative metrics
         metrics = compute_metrics(problem, res)
-
         scenario_data["trajectories"][key] = {
             "name": res.method_name,
             "success": bool(res.success),
@@ -141,12 +131,12 @@ def build_scenario_dict(
             "energy": {
                 "kinetic": kinetic_energy.tolist(),
                 "potential": potential_energy.tolist(),
-                "total": total_energy.tolist(),
+                "total": (kinetic_energy + potential_energy).tolist(),
             },
             "power": {
                 "joint1": power_j1.tolist(),
                 "joint2": power_j2.tolist(),
-                "total": power_total.tolist(),
+                "total": (power_j1 + power_j2).tolist(),
             },
             "reality_check": reality_data,
         }
@@ -162,7 +152,6 @@ def export_trajectory_json(
     scenario_desc: str = "",
     output_path: str = "web_viewer/trajectory_data.json",
 ):
-    """Exports a single scenario data file to JSON."""
     data = build_scenario_dict(
         problem,
         results,

@@ -1,5 +1,3 @@
-"""Performance metrics and comparative quantitative analysis."""
-
 from dataclasses import dataclass
 from typing import Dict, Any
 import numpy as np
@@ -9,8 +7,6 @@ from arm_opt.solvers.base import TrajectoryResult, TrajectoryProblem
 
 @dataclass
 class TrajectoryMetrics:
-    """Comprehensive performance metrics for a solved trajectory."""
-
     method_name: str
     success: bool
     solve_time: float
@@ -40,22 +36,16 @@ class TrajectoryMetrics:
 def compute_metrics(
     problem: TrajectoryProblem, result: TrajectoryResult
 ) -> TrajectoryMetrics:
-    """Evaluates all quantitative benchmark metrics from a solver result."""
     t = result.time
     q = result.state[:, :2]
     u = result.control
 
     dt = np.diff(t)
-    # Trapezoidal integration of ||u||^2
     u_norm_sq = np.sum(u**2, axis=1)
     total_effort = float(np.sum(0.5 * dt * (u_norm_sq[:-1] + u_norm_sq[1:])))
-
     peak_torque = float(np.max(np.abs(u)))
-
-    # Terminal state error
     term_state_err = float(np.linalg.norm(result.state[-1] - problem.xf))
 
-    # Terminal Cartesian end-effector error
     _, ee_final = forward_kinematics(q[-1], problem.arm_params)
     _, ee_target = forward_kinematics(problem.xf[:2], problem.arm_params)
     terminal_ee_err = float(np.linalg.norm(ee_final - ee_target))
@@ -72,4 +62,3 @@ def compute_metrics(
         terminal_ee_error_meters=terminal_ee_err,
         max_constraint_violation=result.max_constraint_violation,
     )
-

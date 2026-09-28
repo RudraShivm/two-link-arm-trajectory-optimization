@@ -1,11 +1,6 @@
 """
-arm_opt: Planar Two-Link Manipulator Trajectory Optimization Benchmark Suite.
-
-Comparing:
-1. Single Direct Shooting (RK4)
-2. Trapezoidal Direct Collocation
-3. Hermite-Simpson Direct Collocation (Separated Form)
+arm_opt: two-link arm trajectory optimization
+(shooting, trapezoidal collocation, Hermite–Simpson collocation)
 """
 
 __version__ = "1.0.0"
-

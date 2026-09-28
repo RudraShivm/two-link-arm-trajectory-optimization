@@ -1,5 +1,3 @@
-"""Trajectory optimization solvers package."""
-
 from arm_opt.solvers.base import TrajectoryProblem, TrajectoryResult
 from arm_opt.solvers.shooting import ShootingSolver
 from arm_opt.solvers.trapezoidal import TrapezoidalCollocationSolver
@@ -12,4 +10,3 @@ __all__ = [
     "TrapezoidalCollocationSolver",
     "HermiteSimpsonCollocationSolver",
 ]
-

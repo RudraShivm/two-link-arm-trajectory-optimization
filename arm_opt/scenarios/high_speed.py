@@ -1,5 +1,3 @@
-"""Scenario 4: High-speed dynamic whip maneuver."""
-
 import numpy as np
 from arm_opt.dynamics.parameters import ArmParameters
 from arm_opt.solvers.base import TrajectoryProblem
@@ -7,8 +5,6 @@ from arm_opt.scenarios.base_scenario import BaseScenario
 
 
 class HighSpeedScenario(BaseScenario):
-    """Aggressive high-velocity maneuver where nonlinear Coriolis forces dominate."""
-
     @property
     def name(self) -> str:
         return "High-Speed Dynamic Maneuver"
@@ -16,11 +12,8 @@ class HighSpeedScenario(BaseScenario):
     @property
     def description(self) -> str:
         return (
-            "Executes a large angular stroke from [-pi/3, pi/4] to [pi/2, -pi/3] "
-            "in an aggressive 0.45s time budget. At high joint velocities, "
-            "Coriolis and centrifugal terms (quadratic in velocity) dominate the dynamics. "
-            "Low-order piecewise linear methods (Trapezoidal) suffer from severe discretization "
-            "defects unless fine grids are used, while Hermite-Simpson retains high fidelity."
+            "Large angular stroke from [-pi/3, pi/4] to [pi/2, -pi/3] in 0.45 s, "
+            "where Coriolis and centrifugal terms are significant."
         )
 
     def create_problem(self, n_nodes: int = 25) -> TrajectoryProblem:
@@ -37,4 +30,3 @@ class HighSpeedScenario(BaseScenario):
             dq_max=25.0,
             effort_weight_dq=0.0001,
         )
-

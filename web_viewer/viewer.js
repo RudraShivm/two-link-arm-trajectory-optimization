@@ -1,16 +1,10 @@
 /**
- * Two-Link Manipulator Studio — Interactive Research Console
- * CSE 402 · Optimal Control & Trajectory Optimization
- * Theme: 100% Catppuccin Mocha Dark Canvas & Charts
+ * Two-link arm trajectory viewer
  */
 "use strict";
 
 (function () {
-  /* ═══════════════════════════════════════════════
-     CATPPUCCIN MOCHA PALETTE CONSTANTS
-  ═══════════════════════════════════════════════ */
   const PALETTE = {
-    // Surfaces
     base:            "#1e1e2e",
     mantle:          "#181825",
     crust:           "#11111b",
@@ -21,32 +15,23 @@
     overlay1:        "#7f849c",
     subtext0:        "#a6adc8",
     text:            "#cdd6f4",
-
-    // Accent colors
-    shooting:        "#fab387", // Peach
-    trapezoidal:     "#89b4fa", // Blue
-    hermite_simpson: "#cba6f7", // Mauve
-    target:          "#a6e3a1", // Green
-    obstacle:        "#f38ba8", // Red
-    
-    // Physics / breakdown colors
-    inertial:        "#fab387", // Peach
-    coriolis:        "#f5c2e7", // Pink
-    gravity:         "#f9e2af", // Yellow
-    kinetic:         "#89b4fa", // Blue
-    potential:       "#fab387", // Peach
-    total:           "#cba6f7", // Mauve
-    power:           "#a6e3a1", // Green
-    
-    // Canvas grid elements
+    shooting:        "#fab387",
+    trapezoidal:     "#89b4fa",
+    hermite_simpson: "#cba6f7",
+    target:          "#a6e3a1",
+    obstacle:        "#f38ba8",
+    inertial:        "#fab387",
+    coriolis:        "#f5c2e7",
+    gravity:         "#f9e2af",
+    kinetic:         "#89b4fa",
+    potential:       "#fab387",
+    total:           "#cba6f7",
+    power:           "#a6e3a1",
     grid:            "rgba(88, 91, 112, 0.28)",
     axis:            "rgba(108, 112, 134, 0.55)",
     reach:           "rgba(108, 112, 134, 0.35)",
   };
 
-  /* ═══════════════════════════════════════════════
-     DOM REFERENCES
-  ═══════════════════════════════════════════════ */
   const scenarioSelector  = document.getElementById("scenario-selector");
   const navTabs           = document.querySelectorAll(".nav-tab");
   const panelViews        = document.querySelectorAll(".panel-view");
@@ -95,9 +80,6 @@
   const canvasWorkspace   = document.getElementById("canvas-workspace");
   const ctxW              = canvasWorkspace ? canvasWorkspace.getContext("2d") : null;
 
-  /* ═══════════════════════════════════════════════
-     APPLICATION STATE
-  ═══════════════════════════════════════════════ */
   let masterCatalog    = null;
   let activeScenario   = null;
   let activeKey        = "rest_to_rest";
@@ -109,129 +91,11 @@
   let activeTab        = "tab-workspace";
   let focusMethod      = "hermite_simpson";
 
-  /* ═══════════════════════════════════════════════
-     SYNTHETIC DATA GENERATOR (ROBUST FALLBACK)
-  ═══════════════════════════════════════════════ */
-  function makeSyntheticScenario(name, desc, duration, hasObstacle) {
-    const N = 30;
-    const dt = duration / N;
-    const times = [], q1arr = [], q2arr = [], dq1arr = [], dq2arr = [],
-          tau1arr = [], tau2arr = [], p_elb = [], p_ee = [];
-
-    for (let i = 0; i <= N; i++) {
-      const t  = i * dt;
-      const s  = 0.5 * (1 - Math.cos((Math.PI * t) / duration));
-      const ds = 0.5 * (Math.PI / duration) * Math.sin((Math.PI * t) / duration);
-      const q1 = s * (Math.PI / 2);
-      const q2 = 0;
-      const dq1 = ds * (Math.PI / 2);
-      const dq2 = 0;
-      const tau1 = 18 * Math.cos(q1) + 2 * Math.sin(q1) * dq1;
-      const tau2 = 6 * Math.cos(q1 + q2);
-      times.push(t);
-      q1arr.push(q1);
-      q2arr.push(q2);
-      dq1arr.push(dq1);
-      dq2arr.push(dq2);
-      tau1arr.push(tau1);
-      tau2arr.push(tau2);
-      p_elb.push([Math.cos(q1), Math.sin(q1)]);
-      p_ee.push([Math.cos(q1) + Math.cos(q1 + q2), Math.sin(q1) + Math.sin(q1 + q2)]);
-    }
-
-    const mkTraj = (mname, costMul, tSolve, iters, noiseAmp) => ({
-      name: mname,
-      success: true,
-      cost: 217.79 * costMul,
-      solve_time: tSolve,
-      iterations: iters,
-      time: times,
-      q: times.map((_, i) => [q1arr[i] + noiseAmp * (Math.random() - 0.5) * 0.01, q2arr[i]]),
-      dq: times.map((_, i) => [dq1arr[i], dq2arr[i]]),
-      tau: times.map((_, i) => [tau1arr[i], tau2arr[i]]),
-      p_elbow: p_elb,
-      p_ee: p_ee,
-      torques_breakdown: {
-        inertial: times.map((_, i) => [tau1arr[i] * 0.45, tau2arr[i] * 0.40]),
-        coriolis: times.map((_, i) => [tau1arr[i] * 0.08, tau2arr[i] * 0.10]),
-        gravity: times.map((_, i) => [tau1arr[i] * 0.47, tau2arr[i] * 0.50]),
-      },
-      energy: {
-        kinetic: times.map((_, i) => 0.5 * (dq1arr[i] ** 2 + dq2arr[i] ** 2)),
-        potential: times.map((_, i) => 9.81 * (p_elb[i][1] * 0.5 + p_ee[i][1] * 0.5)),
-        total: times.map((_, i) => 0.5 * (dq1arr[i] ** 2 + dq2arr[i] ** 2) + 9.81 * (p_elb[i][1] * 0.5 + p_ee[i][1] * 0.5)),
-      },
-      power: {
-        joint1: times.map((_, i) => tau1arr[i] * dq1arr[i]),
-        joint2: times.map((_, i) => tau2arr[i] * dq2arr[i]),
-        total: times.map((_, i) => tau1arr[i] * dq1arr[i] + tau2arr[i] * dq2arr[i]),
-      },
-      reality_check: {
-        t_sim: times,
-        ee_drift: times.map((t) => noiseAmp * 0.04 * Math.abs(Math.sin(t * 3))),
-        max_drift: noiseAmp * 0.078,
-        terminal_drift: noiseAmp * 0.035,
-      },
-      metrics: {
-        success: true,
-        solve_time_sec: tSolve,
-        iterations: iters,
-        cost: 217.79 * costMul,
-        peak_torque_Nm: 26.5 * costMul,
-        terminal_ee_err_m: noiseAmp * 0.0008,
-      },
-    });
-
-    return {
-      metadata: {
-        name,
-        description: desc,
-        duration,
-        dt,
-        n_nodes: N,
-        tau_max: 30.0,
-        links: { l1: 1.0, l2: 1.0, m1: 1.0, m2: 1.0, g: 9.81 },
-      },
-      target: { q: [Math.PI / 2, 0], ee: [0, 2] },
-      initial: { q: [0, 0], ee: [2, 0] },
-      obstacle: hasObstacle ? { center: [1.2, 0.0], radius: 0.35 } : null,
-      trajectories: {
-        shooting: mkTraj("Single Shooting (RK4)", 1.30, 6.37, 53, 3.0),
-        trapezoidal: mkTraj("Trapezoidal Collocation", 1.03, 3.14, 39, 0.8),
-        hermite_simpson: mkTraj("Hermite-Simpson Collocation", 1.00, 12.26, 54, 0.1),
-      },
-    };
+  function showLoadError(msg) {
+    if (scenarioTitle) scenarioTitle.textContent = "No data loaded";
+    if (scenarioDesc) scenarioDesc.textContent = msg;
   }
 
-  function createFallbackCatalog() {
-    return {
-      active_scenario: "rest_to_rest",
-      scenarios: {
-        rest_to_rest: makeSyntheticScenario(
-          "Rest-to-Rest Baseline",
-          "Moving from horizontal extension [0°,0°] to upright [90°,0°] in 1.0s under 30 N•m torque bounds.",
-          1.0,
-          false
-        ),
-        obstacle: makeSyntheticScenario(
-          "Cartesian Obstacle Avoidance",
-          "Steering the end-effector around a circular keep-out zone at (1.20, 0.00) r=0.35m.",
-          1.2,
-          true
-        ),
-        high_speed: makeSyntheticScenario(
-          "High-Speed Coriolis Maneuver",
-          "Rapid stroke across a large angular range in 0.45s where Coriolis coupling dominates.",
-          0.45,
-          false
-        ),
-      },
-    };
-  }
-
-  /* ═══════════════════════════════════════════════
-     NUMERICAL INTERPOLATION
-  ═══════════════════════════════════════════════ */
   function interp(traj, t) {
     const times = traj.time;
     const N = times.length;
@@ -284,9 +148,6 @@
     };
   }
 
-  /* ═══════════════════════════════════════════════
-     INITIALIZATION
-  ═══════════════════════════════════════════════ */
   function init() {
     fetch("catalog.json")
       .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -302,9 +163,9 @@
             boot("active");
           })
           .catch(() => {
-            console.info("Using embedded fallback catalog.");
-            masterCatalog = createFallbackCatalog();
-            boot("rest_to_rest");
+            showLoadError(
+              "Run: PYTHONPATH=. python3 build_full_catalog.py  (or generate_showcase.py)"
+            );
           })
       );
 
@@ -321,9 +182,6 @@
     loadScenario(key);
   }
 
-  /* ═══════════════════════════════════════════════
-     SCENARIO SELECTION
-  ═══════════════════════════════════════════════ */
   function populateScenarioSelector() {
     if (!masterCatalog || !masterCatalog.scenarios) return;
     scenarioSelector.innerHTML = "";
@@ -364,9 +222,6 @@
     renderAllViews();
   }
 
-  /* ═══════════════════════════════════════════════
-     EVENT HANDLERS
-  ═══════════════════════════════════════════════ */
   function setupEvents() {
     scenarioSelector.addEventListener("change", (e) => loadScenario(e.target.value));
 
@@ -444,9 +299,6 @@
     });
   }
 
-  /* ═══════════════════════════════════════════════
-     PLAYBACK ENGINE
-  ═══════════════════════════════════════════════ */
   function togglePlay() {
     isPlaying = !isPlaying;
     btnPlayPause.innerHTML = isPlaying ? "&#10074;&#10074; Pause" : "&#9654; Play";
@@ -479,9 +331,6 @@
     renderAllViews();
   }
 
-  /* ═══════════════════════════════════════════════
-     TELEMETRY UPDATES
-  ═══════════════════════════════════════════════ */
   function updateMethodBadge() {
     if (!telMethodBadge) return;
     const labels = {
@@ -550,9 +399,6 @@
     }
   }
 
-  /* ═══════════════════════════════════════════════
-     AUDIT TABLE
-  ═══════════════════════════════════════════════ */
   function updateAuditTable() {
     if (!activeScenario || !auditTableBody) return;
     const trajs = activeScenario.trajectories;
@@ -584,9 +430,6 @@
     auditTableBody.innerHTML = html;
   }
 
-  /* ═══════════════════════════════════════════════
-     CANVAS RESIZE
-  ═══════════════════════════════════════════════ */
   function resizeAllCanvases() {
     const ids = [
       "canvas-workspace",
@@ -607,9 +450,6 @@
     });
   }
 
-  /* ═══════════════════════════════════════════════
-     RENDER DISPATCHER
-  ═══════════════════════════════════════════════ */
   function renderAllViews() {
     if (!activeScenario) return;
     if (activeTab === "tab-workspace") renderWorkspace();
@@ -619,9 +459,6 @@
     else if (activeTab === "tab-reality") renderReality();
   }
 
-  /* ═══════════════════════════════════════════════
-     DARK CATPPUCCIN CHART HELPER
-  ═══════════════════════════════════════════════ */
   function drawLineChart(cvs, ctx2, series, opts = {}) {
     if (!cvs || !ctx2) return;
     const w = cvs.width, h = cvs.height;
@@ -721,9 +558,6 @@
     }
   }
 
-  /* ═══════════════════════════════════════════════
-     VIEW 1: WORKSPACE KINEMATICS STAGE
-  ═══════════════════════════════════════════════ */
   function renderWorkspace() {
     if (!ctxW || !canvasWorkspace) return;
     const w = canvasWorkspace.width, h = canvasWorkspace.height;
@@ -937,9 +771,6 @@
     }
   }
 
-  /* ═══════════════════════════════════════════════
-     VIEW 2: PHASE PORTRAITS
-  ═══════════════════════════════════════════════ */
   function renderPhasePortraits() {
     const configs = [
       { id: "chart-phase-j1", jointIdx: 0 },
@@ -971,9 +802,6 @@
     }
   }
 
-  /* ═══════════════════════════════════════════════
-     VIEW 3: DYNAMIC TORQUES & POWER
-  ═══════════════════════════════════════════════ */
   function renderTorques() {
     for (const [jointIdx, chartId] of [[0, "chart-torque-j1"], [1, "chart-torque-j2"]]) {
       const cvs = document.getElementById(chartId);
@@ -1023,9 +851,6 @@
     }
   }
 
-  /* ═══════════════════════════════════════════════
-     VIEW 4: ENERGY BREAKDOWN
-  ═══════════════════════════════════════════════ */
   function renderEnergy() {
     const cvs = document.getElementById("chart-energy");
     if (!cvs) return;
@@ -1041,9 +866,6 @@
     drawLineChart(cvs, ctx2, series, { showCursor: true });
   }
 
-  /* ═══════════════════════════════════════════════
-     VIEW 5: PHYSICAL REALITY CHECK (ODE DRIFT)
-  ═══════════════════════════════════════════════ */
   function renderReality() {
     const cvs = document.getElementById("chart-drift");
     if (!cvs) return;
@@ -1063,8 +885,5 @@
     drawLineChart(cvs, ctx2, series, { showCursor: false, yMin: 0 });
   }
 
-  /* ═══════════════════════════════════════════════
-     DOCUMENT LOAD
-  ═══════════════════════════════════════════════ */
   document.addEventListener("DOMContentLoaded", init);
 })();
