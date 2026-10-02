@@ -63,7 +63,7 @@ made things worse:
 | high_speed 40 | 111 it | 103 it (worse answer) | **56 it** |
 | swing_up 20 | 94 it | 56 it | **48 it** |
 
-*Viva point:* "Scaling isn't just dividing variables. The objective has to be scaled consistently too."
+*Takeaway:* "Scaling isn't just dividing variables. The objective has to be scaled consistently too."
 
 ### Surprise 2: some scenarios have more than one answer
 

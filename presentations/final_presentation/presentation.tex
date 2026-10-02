@@ -1,0 +1,530 @@
+\documentclass[10pt,aspectratio=169,t]{beamer}
+\usefonttheme{professionalfonts}
+\setbeamertemplate{navigation symbols}{}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\graphicspath{{figures/}{../experiments/results/}{../output/}{../docs/figures/}}
+
+% ---------------------------------------------------------------- Megh palette
+\definecolor{ink}{HTML}{0F172A}
+\definecolor{inktwo}{HTML}{475569}
+\definecolor{inkthree}{HTML}{6F6F6F}
+\definecolor{accent}{HTML}{215CAF}
+\definecolor{rulegrey}{HTML}{E2E8F0}
+\definecolor{sigred}{HTML}{B7352D}
+
+\setbeamercolor{normal text}{fg=ink,bg=white}
+\setbeamercolor{structure}{fg=accent}
+\setbeamercolor{itemize item}{fg=accent}
+\setbeamercolor{enumerate item}{fg=accent}
+\setbeamertemplate{itemize item}{\raisebox{0.15em}{\rule{0.35em}{0.35em}}}
+\setbeamertemplate{enumerate item}{\bfseries\insertenumlabel.}
+\setlength{\leftmargini}{1.2em}
+
+% eyebrow = current section, set with \Sec{NUMBER}{NAME}
+\newcommand{\eyebrow}{}
+\newcommand{\Sec}[2]{\section{#2}\renewcommand{\eyebrow}{#1 \,$\cdot$\, #2}}
+
+\setbeamertemplate{frametitle}{%
+  \vspace*{0.5em}%
+  {\color{accent}\scriptsize\bfseries\eyebrow}\par\vspace{0.15em}%
+  {\color{ink}\Large\bfseries\insertframetitle}\par\vspace{0.25em}%
+  {\color{rulegrey}\rule{\linewidth}{0.8pt}}%
+}
+\setbeamertemplate{footline}{%
+  \hspace*{1.2em}{\color{rulegrey}\rule{\dimexpr\paperwidth-2.4em\relax}{0.4pt}}\par\vspace{0.2em}%
+  \hbox to \paperwidth{\hspace*{1.2em}{\color{inkthree}\tiny CSE402 $\cdot$ Section C-2 $\cdot$ Two-link arm trajectory optimization}\hfill{\color{inkthree}\tiny\insertframenumber\,/\,\inserttotalframenumber}\hspace*{1.2em}}%
+  \vspace{0.7em}%
+}
+\setbeamersize{text margin left=1.2em,text margin right=1.2em}
+
+\newcommand{\takeaway}[1]{\par\vspace{0.4em}{\small\textbf{Takeaway:} #1}}
+\newcommand{\muted}[1]{{\color{inktwo}#1}}
+\renewcommand{\arraystretch}{1.15}
+
+% -------------------------------------------------------------------- document
+\begin{document}
+
+% ============================================================== title
+{
+\setbeamertemplate{footline}{}
+\begin{frame}[c]
+  \noindent
+  {\color{accent}\scriptsize\bfseries CSE402 $\cdot$ NUMERICAL ANALYSIS, SIMULATION AND MODELING SESSIONAL $\cdot$ SECTION C-2}\par\vspace{0.8em}
+  {\color{ink}\huge\bfseries Comparing Three Numerical Methods\\[0.2em] for Planar Two-Link Arm Motion}\par\vspace{0.6em}
+  {\color{inktwo}\normalsize Single Shooting (RK4) $\cdot$ Trapezoidal Collocation $\cdot$ Hermite--Simpson Collocation}\par\vspace{0.6em}
+  {\color{rulegrey}\rule{0.62\linewidth}{0.8pt}}\par\vspace{0.6em}
+  {\small\color{inktwo}
+  \begin{tabular}{@{}lll@{}}
+    2105161 --- Sadia Naushin & 2105163 --- Dibbo Chowdhury & 2105173 --- Sunanda Chowdhury\\
+    2105174 --- Nujhat Sadia  & 2105176 --- Navin Nawar     & 2105179 --- Arpa Das
+  \end{tabular}}
+\end{frame}
+}
+
+% ============================================================== 1 problem
+\Sec{1}{PROBLEM}
+
+\begin{frame}{Move the arm from pose A to pose B with least torque}
+  \vspace{0.6em}
+  Find joint trajectories $q(t)$ and torques $\tau(t)$, $t\in[0,T]$, that solve
+  \begin{align*}
+    \min_{q,\,\tau}\quad & \int_0^T \Bigl(\|\tau\|^2 + w\,\|\dot q\|^2\Bigr)\,dt, \qquad w = 10^{-3}\\[0.4em]
+    \text{subject to}\quad & M(q)\,\ddot q + C(q,\dot q)\,\dot q + g(q) = \tau \qquad\text{(physics, at every instant)}\\
+    & q(0) = q_A,\quad q(T) = q_B,\quad \dot q(0)=\dot q(T)=0\\
+    & |\tau| \le \tau_{\max},\qquad |\dot q| \le \dot q_{\max}
+  \end{align*}
+  There is no closed-form solution: the dynamics must hold at infinitely many instants.
+  \textbf{Direct transcription} keeps only $N{+}1$ time points and turns this into a finite
+  nonlinear program, solved here with SciPy's SLSQP.
+
+  \takeaway{we compare three transcriptions on the \emph{same} model, cost and tasks, so every difference comes from the method.}
+\end{frame}
+
+\begin{frame}{The two-link arm is a 4-state, 2-input nonlinear system}
+  \begin{columns}[T]
+    \begin{column}{0.36\textwidth}
+      \centering
+      \includegraphics[width=\linewidth]{two_link_arm_kinematics.png}\par
+      \raggedright\footnotesize\muted{Uniform rods: $l_i = 1$\,m, $m_i = 1$\,kg, $r_i = 0.5$\,m, $I_i = \tfrac{1}{12}$\,kg$\cdot$m$^2$, $g_0 = 9.81$\,m/s$^2$.}
+    \end{column}
+    \begin{column}{0.62\textwidth}
+      \small
+      State $x = [\theta_1,\theta_2,\dot\theta_1,\dot\theta_2]^\top$, control $u = [\tau_1,\tau_2]^\top$, $q = [\theta_1,\theta_2]^\top$.
+      \begin{align*}
+        M_{11} &= m_1 r_1^2 + I_1 + m_2\bigl(l_1^2 + r_2^2 + 2 l_1 r_2 \cos\theta_2\bigr) + I_2\\
+        M_{12} &= M_{21} = m_2\bigl(r_2^2 + l_1 r_2 \cos\theta_2\bigr) + I_2,\qquad
+        M_{22} = m_2 r_2^2 + I_2\\
+        C\dot q &= \begin{bmatrix} -h(2\dot\theta_1\dot\theta_2 + \dot\theta_2^2) \\ h\,\dot\theta_1^2 \end{bmatrix},\qquad h = m_2 l_1 r_2 \sin\theta_2\\
+        g(q) &= g_0\begin{bmatrix} (m_1 r_1 + m_2 l_1)\cos\theta_1 + m_2 r_2 \cos(\theta_1+\theta_2) \\ m_2 r_2 \cos(\theta_1+\theta_2) \end{bmatrix}
+      \end{align*}
+      Every method calls the same function:
+      \[
+        \dot x = f(x,u) = \begin{bmatrix} \dot q \\ M(q)^{-1}\bigl(u - C\dot q - g\bigr) \end{bmatrix}
+      \]
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ============================================================== 2 methods
+\Sec{2}{METHODS}
+
+\begin{frame}{Method 1 --- Single shooting: optimise torques, simulate states}
+  \vspace{0.6em}
+  Unknowns are only the torques $u_0,\dots,u_{N-1}$ ($2N$ variables), each held constant over its interval.
+  The states come from one classical RK4 step per interval:
+  \[
+    x_{k+1} = x_k + \frac{h}{6}\bigl(k_1 + 2k_2 + 2k_3 + k_4\bigr)
+  \]
+  \[
+    k_1 = f(x_k,u_k),\quad k_2 = f\!\bigl(x_k + \tfrac{h}{2}k_1, u_k\bigr),\quad
+    k_3 = f\!\bigl(x_k + \tfrac{h}{2}k_2, u_k\bigr),\quad k_4 = f(x_k + h k_3, u_k)
+  \]
+  The only constraint is the end state: \quad $x_N(u_0,\dots,u_{N-1}) = x_B$.
+
+  \vspace{0.8em}
+  Each step is $\mathcal{O}(h^4)$ accurate, so accuracy is not the weakness --- \textbf{conditioning} is:
+  $x_N$ chains $N$ steps together, so a tiny change in $u_0$ is amplified through every later step.
+
+  \takeaway{few variables, but a long and sensitive chain from the first torque to the final state.}
+\end{frame}
+
+\begin{frame}{Method 2 --- Trapezoidal collocation: states become unknowns}
+  \vspace{0.6em}
+  Unknowns are the state \emph{and} torque at every node,
+  $z = [x_0,u_0,\dots,x_N,u_N]$, i.e.\ $6(N{+}1)$ variables.
+  Physics is enforced as a \emph{defect} between neighbouring nodes (trapezoid rule):
+  \[
+    x_{k+1} - x_k = \frac{h}{2}\Bigl(f(x_k,u_k) + f(x_{k+1},u_{k+1})\Bigr), \qquad k = 0,\dots,N-1
+  \]
+  The cost uses the same rule on the running cost $\ell = \|u\|^2 + w\|\dot q\|^2$:
+  \[
+    J = \sum_{k=0}^{N-1} \frac{h}{2}\bigl(\ell_k + \ell_{k+1}\bigr)
+  \]
+  Accuracy is $\mathcal{O}(h^2)$ globally. Each defect touches only two neighbouring nodes, so an error at one time
+  cannot spread along the whole trajectory, and the constraint Jacobian is banded and sparse.
+
+  \takeaway{more variables than shooting, but every equation is local and well conditioned.}
+\end{frame}
+
+\begin{frame}{Method 3 --- Hermite--Simpson: add a midpoint per interval}
+  \vspace{0.6em}
+  Separated form: the midpoint state $x_c$ and control $u_c$ are independent unknowns,
+  giving $6(2N{+}1) = 12N + 6$ variables. Two constraints per interval:
+  \begin{align*}
+    \text{cubic midpoint:}\quad & x_c - \tfrac{1}{2}\bigl(x_k + x_{k+1}\bigr) - \tfrac{h}{8}\bigl(f_k - f_{k+1}\bigr) = 0\\[0.3em]
+    \text{Simpson defect:}\quad & x_{k+1} - x_k - \tfrac{h}{6}\bigl(f_k + 4 f(x_c,u_c) + f_{k+1}\bigr) = 0
+  \end{align*}
+  with $f_k = f(x_k,u_k)$. The cost uses Simpson's weights:
+  \[
+    J = \sum_{k=0}^{N-1} \frac{h}{6}\bigl(\ell_k + 4\ell_c + \ell_{k+1}\bigr)
+  \]
+  The state is a cubic spline and the control is piecewise quadratic; the error shrinks as $\mathcal{O}(h^4)$.
+
+  \takeaway{roughly twice the unknowns per interval in exchange for fourth-order accuracy.}
+\end{frame}
+
+\begin{frame}{The three methods at a glance}
+  \vspace{1.2em}
+  \centering
+  \begin{tabular}{@{}l>{\centering\arraybackslash}p{3.3cm}>{\centering\arraybackslash}p{3.3cm}>{\centering\arraybackslash}p{3.3cm}@{}}
+    \toprule
+    & \textbf{Shooting (RK4)} & \textbf{Trapezoidal} & \textbf{Hermite--Simpson} \\
+    \midrule
+    Unknowns          & $2N$ & $6(N{+}1)$ & $12N+6$ \\
+    Physics enforced  & by simulation & between 2 neighbours & 2 neighbours + midpoint \\
+    Accuracy          & $\mathcal{O}(h^4)$ per step & $\mathcal{O}(h^2)$ & $\mathcal{O}(h^4)$ \\
+    Conditioning      & poor on long horizons & good & good \\
+    Control between nodes & held constant & linear & quadratic \\
+    \bottomrule
+  \end{tabular}
+
+  \vspace{1.2em}
+  \raggedright
+  \takeaway{the last row matters later: it decides how a torque schedule must be replayed to be judged fairly.}
+\end{frame}
+
+% ============================================================== 3 evidence
+\Sec{3}{EVIDENCE}
+
+\begin{frame}{Four test scenarios of increasing difficulty}
+  \vspace{1.0em}
+  \centering\small
+  \begin{tabular}{@{}llccl@{}}
+    \toprule
+    \textbf{Scenario} & \textbf{Motion} & $T$ & $\tau_{\max}$ & \textbf{What makes it hard} \\
+    \midrule
+    Baseline      & $[0,0]\to[\pi/2,0]$               & 1.0\,s  & 30\,N$\cdot$m & reference case \\
+    Obstacle      & $[-\pi/4,0]\to[\pi/4,0]$          & 1.2\,s  & 40\,N$\cdot$m & circle $r=0.35$\,m at $(1.2,0)$ \\
+    Swing-up      & $[-\pi/2,0]\to[\pi/2,0]$          & 2.0\,s  & 6\,N$\cdot$m  & too weak to lift (stall $\approx$14.7\,N$\cdot$m) \\
+    Fast maneuver & $[-\pi/3,\pi/4]\to[\pi/2,-\pi/3]$ & 0.45\,s & 80\,N$\cdot$m & strong velocity coupling \\
+    \bottomrule
+  \end{tabular}
+
+  \vspace{1.4em}
+  \raggedright\normalsize
+  All solvers: SLSQP, at most 400 iterations, tolerance $10^{-5}$, straight-line initial guess with gravity-holding torque.
+
+  \vspace{0.4em}
+  Physical check: optimal torques replayed in SciPy's adaptive DOP853 integrator (tolerance $10^{-8}$).
+\end{frame}
+
+\begin{frame}{Baseline: Trapezoidal fastest, Hermite--Simpson least effort}
+  \vspace{1.2em}
+  \centering
+  \begin{tabular}{@{}lrrr@{}}
+    \toprule
+    \textbf{Metric} ($N = 20$, $T = 1.0$\,s) & \textbf{Shooting} & \textbf{Trapezoidal} & \textbf{Hermite--Simpson} \\
+    \midrule
+    Solve time (s)                       & 6.37  & \textbf{3.14} & 12.26 \\
+    Optimizer iterations                 & 53    & \textbf{39}   & 54    \\
+    Torque effort $\int\|\tau\|^2dt$     & 282.9 & 223.4         & \textbf{217.8} \\
+    Peak torque (N$\cdot$m)              & 25.1  & 26.5          & 28.6  \\
+    \bottomrule
+  \end{tabular}
+
+  \vspace{1.4em}
+  \raggedright
+  All three report success. Hermite--Simpson's cubic description of the motion finds a trajectory that needs
+  about \textbf{23\% less effort than shooting}; Trapezoidal solves in half of shooting's time with the fewest iterations.
+
+  \takeaway{collocation wins on both speed and effort on the reference task.}
+\end{frame}
+
+\begin{frame}{Collocation methods agree; shooting finds a different motion}
+  \vspace{0.3em}
+  \centering
+  \includegraphics[width=0.455\textwidth]{traj_ee.png}\hfill
+  \includegraphics[width=0.455\textwidth]{traj_torque.png}\par
+  \raggedright
+  \takeaway{the two collocation curves overlap almost exactly; shooting settles in another, costlier local optimum.}
+\end{frame}
+
+\begin{frame}{Replay drift measures the torque convention, not the method}
+  \vspace{0.3em}
+  \small
+  First reading: shooting says it hits the goal, but the DOP853 replay lands \textbf{1.77\,m} away.
+  The replay interpolated torques \emph{linearly}; shooting assumed them \emph{held constant} (zero-order hold).
+  \vspace{0.4em}
+
+  \centering
+  \begin{tabular}{@{}llrr@{}}
+    \toprule
+    \textbf{Scenario} & \textbf{Method} & \textbf{Linear replay} & \textbf{Zero-order-hold replay} \\
+    \midrule
+    Baseline & Shooting        & 1.771\,m & \textbf{0.234\,m} \\
+             & Trapezoidal     & \textbf{0.071\,m} & 2.973\,m \\
+             & Hermite--Simpson & \textbf{0.280\,m} & 1.793\,m \\
+    \midrule
+    Obstacle & Shooting        & 1.317\,m & \textbf{0.034\,m} \\
+             & Trapezoidal     & \textbf{0.267\,m} & 2.995\,m \\
+             & Hermite--Simpson & \textbf{0.405\,m} & 3.594\,m \\
+    \bottomrule
+  \end{tabular}
+  \par\vspace{0.2em}{\footnotesize\color{inkthree} Final end-effector drift. Bold = the convention that solver actually assumes.}
+  \raggedright
+
+  \takeaway{every method is accurate under its own convention; we withdrew the ``shooting is unphysical'' claim.}
+\end{frame}
+
+\begin{frame}{Where shooting really fails: long, unstable motions}
+  \vspace{0.3em}
+  \textbf{Swing-up} ($T = 2$\,s, $\tau_{\max} = 6$\,N$\cdot$m): the arm must swing back first to build momentum.
+  \begin{itemize}
+    \item Shooting \textbf{does not converge}: 400 iterations, $\approx$1420\,s, constraint violation $1.4\times10^{-3}$.
+    \item Trapezoidal and Hermite--Simpson both succeed: cost 60.55 and 60.51, zero terminal error.
+  \end{itemize}
+  \vspace{0.3em}
+  \textbf{Fast maneuver} ($N = 25$, $T = 0.45$\,s):\par\vspace{0.2em}
+  \centering\small
+  \begin{tabular}{@{}lrrr@{}}
+    \toprule
+    \textbf{Metric} & \textbf{Shooting} & \textbf{Trapezoidal} & \textbf{Hermite--Simpson} \\
+    \midrule
+    Solve time (s)           & \textbf{24.4} & 55.2 & 101.1 \\
+    Torque effort            & 1336.6 & 1214.4 & \textbf{1208.4} \\
+    Peak torque (N$\cdot$m)  & 80.0 (at limit) & \textbf{74.7} & 77.0 \\
+    Max replay drift (m)     & --- & \textbf{0.020} & 0.023 \\
+    \bottomrule
+  \end{tabular}
+  \raggedright
+
+  \takeaway{Hermite--Simpson's higher order did \emph{not} beat Trapezoidal at $N = 25$: theory is a hypothesis, not a result.}
+\end{frame}
+
+% ============================================================== 4 improvements
+\Sec{4}{IMPROVEMENTS}
+
+\begin{frame}{Five changes to the Trapezoidal solver, same equations}
+  \vspace{0.4em}
+  \small
+  \begin{enumerate}
+    \item[\textbf{S1}] \textbf{Fix start and end as bounds} (lower = upper) instead of equality constraints: 8 fewer constraints.
+    \item[\textbf{S2}] \textbf{Batch the physics}: evaluate $f(x_k,u_k)$ at all nodes in one array operation,
+      with the closed-form $2\times2$ inverse $M^{-1} = \tfrac{1}{\det M}\begin{bmatrix} M_{22} & -M_{12}\\ -M_{12} & M_{11}\end{bmatrix}$.
+    \item[\textbf{S3}] \textbf{Sparse Jacobian by graph colouring}. Finite differences cost one evaluation per variable,
+      \[
+        \frac{\partial F}{\partial z_c} \approx \frac{F(z + \epsilon e_c) - F(z)}{\epsilon},
+      \]
+      but variables that never share a defect can be perturbed together: always \textbf{12 groups}
+      instead of $6(N{+}1)$ ($=246$ at $N = 40$).
+    \item[\textbf{S4}] \textbf{Rescale}: $y = z/s$ from $\dot q_{\max}$, $\tau_{\max}$, and the cost by $h\,\tau_{\max}^2$
+      (scaling variables alone made it \emph{worse}: 115 iterations vs 46).
+    \item[\textbf{S5}] \textbf{Warm start}: solve on a coarse grid, interpolate up, repeat ($10\to20\to40\to80$).
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Each change removes a different bottleneck}
+  \vspace{0.2em}
+  \centering
+  \includegraphics[height=0.56\textheight]{ablation.png}\par
+  \raggedright
+  \takeaway{21.54\,s $\to$ 0.98\,s (22$\times$) at $N = 40$ with the same cost; batching the physics is the biggest single jump.}
+\end{frame}
+
+\begin{frame}{The speed-up grows with grid size}
+  \vspace{0.3em}
+  \begin{columns}[c]
+    \begin{column}{0.58\textwidth}
+      \centering
+      \includegraphics[width=\linewidth]{speed_vs_N.png}
+    \end{column}
+    \begin{column}{0.40\textwidth}
+      \centering\small
+      \begin{tabular}{@{}rrrr@{}}
+        \toprule
+        $N$ & \textbf{Original} & \textbf{All five} & \textbf{Speed-up} \\
+        \midrule
+        10 & 2.55\,s   & 0.18\,s & 14.4$\times$ \\
+        20 & 7.01\,s   & 0.33\,s & 21.5$\times$ \\
+        40 & 21.30\,s  & 0.98\,s & 21.7$\times$ \\
+        80 & 119.87\,s & 2.95\,s & \textbf{40.6$\times$} \\
+        \bottomrule
+      \end{tabular}
+    \end{column}
+  \end{columns}
+  \takeaway{the colouring stays at 12 groups for any $N$, so larger problems gain more.}
+\end{frame}
+
+\begin{frame}{The speed-up holds on every scenario}
+  \vspace{0.6em}
+  \centering
+  \begin{tabular}{@{}lrrrl@{}}
+    \toprule
+    \textbf{Scenario} ($N = 30$) & \textbf{Original} & \textbf{Improved} & \textbf{Speed-up} & \textbf{Answer} \\
+    \midrule
+    Baseline       & 14.53\,s & 0.61\,s & 23.8$\times$ & same \\
+    Obstacle       & 28.78\,s & 3.74\,s &  7.7$\times$ & 29\% cheaper \\
+    Fast maneuver  & 34.63\,s & 0.81\,s & 42.9$\times$ & same \\
+    Under-torqued  & 12.73\,s & 0.42\,s & 30.3$\times$ & same \\
+    Reversal       & 93.54\,s & 1.66\,s & \textbf{56.4$\times$} & same \\
+    Swing-up       & 19.23\,s & 0.83\,s & 23.1$\times$ & same \\
+    \bottomrule
+  \end{tabular}
+
+  \vspace{1.2em}
+  \raggedright
+  Obstacle gains least (its constraint is not vectorised) and lands in a different valid local minimum (239.2 vs 335.3).
+
+  \takeaway{the full configuration is both the fastest and the most reproducible default.}
+\end{frame}
+
+\begin{frame}{Between nodes, trapezoidal collocation implies a parabola}
+  \vspace{0.1em}
+  If $\dot x = f$ is linear over an interval, integrating once gives, for $0 \le \sigma \le h$,
+  \[
+    x(t_k+\sigma) = x_k + f_k\,\sigma + \frac{\sigma^2}{2h}\bigl(f_{k+1} - f_k\bigr),\qquad
+    u(t_k+\sigma) = u_k + \frac{\sigma}{h}\bigl(u_{k+1} - u_k\bigr)
+  \]
+  \vspace{-0.6em}
+  \centering
+  \includegraphics[width=0.66\textwidth]{interpolation.png}\par
+  \raggedright
+  \takeaway{the parabola matches the true motion; straight lines between nodes do not.}
+\end{frame}
+
+\begin{frame}{Measured convergence confirms second order}
+  \vspace{0.3em}
+  \begin{columns}[c]
+    \begin{column}{0.52\textwidth}
+      \centering
+      \includegraphics[height=0.62\textheight]{convergence_state.png}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      Theory: $N \times 2 \;\Rightarrow\; h \div 2 \;\Rightarrow\; \text{error} \div 2^2 = \div 4$.
+      \vspace{0.8em}
+
+      \centering\small
+      \begin{tabular}{@{}lcc@{}}
+        \toprule
+        \textbf{Max state error} & \textbf{all $N$} & \textbf{$N \ge 20$} \\
+        \midrule
+        Baseline      & 1.90 & \textbf{2.04} \\
+        Fast maneuver & 1.76 & \textbf{1.97} \\
+        \bottomrule
+      \end{tabular}
+      \vspace{0.8em}
+
+      \raggedright\normalsize
+      From $N = 40\to80\to160$ the error falls 4.0$\times$ and 3.9$\times$ per doubling.
+      Constraint violation stays below $9\times10^{-13}$.
+    \end{column}
+  \end{columns}
+  \takeaway{the $\mathcal{O}(h^2)$ claim is now a measurement, not an assumption.}
+\end{frame}
+
+\begin{frame}{Checking only the hand let the links pass through the obstacle}
+  \vspace{0.2em}
+  \small
+  New check, per link segment $[a,b]$: \ $s^\ast = \operatorname{clamp}\!\bigl(\tfrac{(c-a)\cdot(b-a)}{\|b-a\|^2},0,1\bigr)$, \ $\|a + s^\ast(b-a) - c\| \ge r + 5$\,mm.
+  \vspace{0.3em}
+
+  \begin{columns}[c]
+    \begin{column}{0.60\textwidth}
+      \centering
+      \includegraphics[width=0.88\linewidth]{obstacle_arm.png}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \centering\footnotesize
+      \begin{tabular}{@{}crrr@{}}
+        \toprule
+        $N$ & \textbf{Check} & \textbf{Cost} & \textbf{Min clear.} \\
+        \midrule
+        20 & hand  & 417.2 & \textcolor{sigred}{$-0.300$} \\
+        20 & arm   & 172.5 & $+0.230$ \\
+        30 & hand  & 414.8 & \textcolor{sigred}{$-0.300$} \\
+        30 & arm   & 171.4 & $+0.230$ \\
+        40 & hand  & 394.7 & \textcolor{sigred}{$-0.299$} \\
+        40 & arm   & 171.0 & $+0.230$ \\
+        \bottomrule
+      \end{tabular}
+    \end{column}
+  \end{columns}
+  \takeaway{``success'' held for the constraint we wrote, not for the arm; the whole-arm check folds the elbow instead.}
+\end{frame}
+
+\begin{frame}{Checking between nodes stops corner cutting}
+  \vspace{0.2em}
+  \small
+  Also enforce the constraint at every interval midpoint, from the parabola at $\sigma = h/2$:
+  \quad $x_{\mathrm{mid}} = x_k + \tfrac{h}{8}\bigl(3f_k + f_{k+1}\bigr)$
+  \vspace{0.3em}
+
+  \begin{columns}[c]
+    \begin{column}{0.60\textwidth}
+      \centering
+      \includegraphics[width=\linewidth]{midpoints_paths.png}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \centering\footnotesize
+      Worst hand penetration (m)\par\vspace{0.3em}
+      \begin{tabular}{@{}crr@{}}
+        \toprule
+        $N$ & \textbf{Midpts off} & \textbf{Midpts on} \\
+        \midrule
+         8 & $-0.302$ & $-0.333$ \\
+        10 & $-0.261$ & $-0.156$ \\
+        15 & $-0.230$ & $-0.013$ \\
+        20 & $-0.126$ & $-0.003$ \\
+        30 & $-0.015$ & $\mathbf{+0.002}$ \\
+        \bottomrule
+      \end{tabular}
+    \end{column}
+  \end{columns}
+  \takeaway{collision-free from $N = 30$ at +24\% effort; halving the gap is no guarantee ($N = 8$ still fails).}
+\end{frame}
+
+% ============================================================== 5 conclusion
+\Sec{5}{CONCLUSION}
+
+\begin{frame}{What we learned}
+  \vspace{0.8em}
+  \begin{enumerate}
+    \item \textbf{Collocation is the practical default.} Trapezoidal is fastest; Hermite--Simpson uses least effort;
+          both solve the swing-up that shooting cannot.
+          \vspace{0.3em}
+    \item \textbf{Solver engineering matters as much as the method.} Five changes give 22--41$\times$ on the baseline
+          and up to 56$\times$ across scenarios, with the same answer.
+          \vspace{0.3em}
+    \item \textbf{Optimizer success $\neq$ physical correctness.} The obstacle runs satisfied every constraint while
+          both links went through the obstacle.
+          \vspace{0.3em}
+    \item \textbf{Check what a metric really measures.} Shooting's 1.77\,m drift was mostly our replay convention;
+          under its own it is 0.234\,m.
+          \vspace{0.3em}
+    \item \textbf{Theory is a hypothesis.} $\mathcal{O}(h^2)$ was confirmed (2.04); Hermite--Simpson's expected edge at $N = 25$ was not.
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Limitations and next steps}
+  \vspace{0.8em}
+  \begin{itemize}
+    \item Whole-arm and midpoint checks exist only in the improved Trapezoidal solver; move them into all three.
+    \item Replay each method under its own control convention everywhere (done only for baseline and obstacle).
+    \item Run a coarse sweep ($N = 8$--$15$) to expose Hermite--Simpson's fourth-order advantage.
+    \item Replace the midpoint check with a certified bound over each interval.
+    \item Vectorise the obstacle constraint; try adaptive time steps and a 6--7 joint arm, as in the base paper.
+  \end{itemize}
+
+  \vspace{1.2em}
+  {\footnotesize\color{inkthree}
+  Cardona-Ortiz and Arechavaleta, AMCS 35(4) 577--589, 2025 $\cdot$ Kelly, SIAM Review 59(4) 849--904, 2017 $\cdot$
+  Tedrake, Underactuated Robotics ch.\ 10, 2024 $\cdot$ Betts, SIAM 2010}
+\end{frame}
+
+{
+\setbeamertemplate{footline}{}
+\begin{frame}[c]
+  \noindent
+  {\color{ink}\huge\bfseries Thank you}\par\vspace{0.4em}
+  {\color{inktwo}\large Questions and discussion}\par\vspace{0.8em}
+  {\color{rulegrey}\rule{0.5\linewidth}{0.8pt}}\par\vspace{0.5em}
+  {\small\color{inktwo} Sadia Naushin $\cdot$ Dibbo Chowdhury $\cdot$ Sunanda Chowdhury $\cdot$ Nujhat Sadia $\cdot$ Navin Nawar $\cdot$ Arpa Das}
+\end{frame}
+}
+
+\end{document}
